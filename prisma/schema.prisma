@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  AUTHOR
+  EDITOR
+  REVIEWER
+  ADMIN
+  READER
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(READER)
+  bio       String?
+  twoFactorSecret      String? 
+  twoFactorCodeExpires DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+
+  submissions Submission[]
+  articles    Article[]
+}
+
+model EditorialBoard {
+  id                String   @id @default(uuid())
+  fullName          String
+  title             String
+  levelOfEducation  String
+  yearsOfExperience Int
+  numberOfPublications Int
+  position          String
+  bio               String?
+  photoUrl          String?
+  email             String?
+  createdAt         DateTime @default(now())
+}
+
+model Article {
+  id          String        @id @default(uuid())
+  title       String
+  abstract    String
+  contentUrl  String
+  category    String?
+  keywords    String?
+  status      ArticleStatus @default(DRAFT)
+  publishedAt DateTime?
+
+  authorId String
+  author   User @relation(fields: [authorId], references: [id])
+}
+
+model Submission {
+  id         String           @id @default(uuid())
+  title      String
+  abstract   String
+  fileUrl    String
+  status     SubmissionStatus @default(SUBMITTED)
+  submittedAt DateTime        @default(now())
+
+  authorId String
+  author   User @relation(fields: [authorId], references: [id])
+}
+
+model CallForPaper {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  deadline    DateTime
+  createdAt   DateTime @default(now())
+}
+
+model Page {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  title     String
+  content   String
+  updatedAt DateTime @updatedAt
+}
+
+model ContactInfo {
+  id       String   @id @default(uuid())
+  email    String
+  phone    String
+  address  String?
+  updatedAt DateTime @updatedAt
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+}
