@@ -1,44 +1,88 @@
-
 import { Request, Response } from "express";
 import { matchedData } from "express-validator";
-import { Role } from "@prisma/client";
+import { UserRole as Role } from "@prisma/client";
 import { prisma } from "../config/database";
 import { logger } from "../utils/logger";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
 import { hashPassword, comparePassword } from "../utils/password";
 import { generateToken } from "../utils/token";
-import { generateTwoFactorCode, sendTwoFactorCode } from "../utils/twoFactorAuth";
+import {
+  generateTwoFactorCode,
+  sendTwoFactorCode,
+  sendEmailVerificationCode,
+} from "../utils/email";
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  const { name, email, password, } = matchedData(req);
+  const { firstName, lastName, email, password } = matchedData(req);
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) {
-    throw new AppError("User with this email already exists", 409);
-  }
+  if (existingUser) throw new AppError("User with this email already exists", 409);
 
   const hashedPassword = await hashPassword(password);
+
+  const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
   const user = await prisma.user.create({
     data: {
-      name,
+      firstName,
+      lastName,
       email,
       password: hashedPassword,
-      role: Role.READER,
+      role: Role.AUTHOR,
+      emailVerificationCode: verificationCode,
+      emailVerificationExpires: expiresAt,
     },
     select: {
       id: true,
-      name: true,
+      firstName: true,
+      lastName: true,
       email: true,
       role: true,
+      emailVerified: true,
     },
   });
+
+  try {
+    await sendEmailVerificationCode(email, verificationCode);
+  } catch (err) {
+    logger.error(`Failed to send verification email: ${err}`);
+  }
 
   logger.info(`New user registered: ${user.email}`);
   res.status(201).json({
     success: true,
-    message: "User registered successfully",
+    message: "User registered successfully. Please check your email for verification code.",
     user,
+  });
+});
+
+export const verifyEmailCode = asyncHandler(async (req: Request, res: Response) => {
+  const { email, code } = matchedData(req);
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || !user.emailVerificationCode)
+    throw new AppError("Invalid email or code", 400);
+
+  if (user.emailVerificationExpires! < new Date())
+    throw new AppError("Verification code has expired", 400);
+
+  if (user.emailVerificationCode !== code)
+    throw new AppError("Invalid verification code", 400);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailVerified: true,
+      emailVerificationCode: null,
+      emailVerificationExpires: null,
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Email verified successfully. You can now log in.",
   });
 });
 
@@ -49,22 +93,27 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     where: { email },
     select: {
       id: true,
-      name: true,
+      firstName: true,
+      lastName: true,
       email: true,
       role: true,
       password: true,
+      emailVerified: true,
       twoFactorSecret: true,
       twoFactorCodeExpires: true,
     },
   });
 
-  if (!user || !(await comparePassword(password, user.password))) {
+  if (!user || !(await comparePassword(password, user.password!)))
     throw new AppError("Invalid credentials", 401);
-  }
 
-  if (user.role === "ADMIN") {
+  if (!user.emailVerified)
+    throw new AppError("Please verify your email before logging in.", 403);
+
+  // ADMIN 2FA
+  if (user.role === Role.ADMIN) {
     const twoFactorCode = generateTwoFactorCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
     await prisma.user.update({
       where: { id: user.id },
@@ -88,13 +137,25 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
-  const token = generateToken({ userId: user.id, role: user.role, name: user.name, email: user.email});
+  const token = generateToken({
+    userId: user.id,
+    role: user.role,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+  });
 
   res.status(200).json({
     success: true,
     message: "Logged in successfully",
     token,
-    user: user
+    user: {
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+    },
   });
 });
 
@@ -105,7 +166,8 @@ export const verifyTwoFactorCode = asyncHandler(async (req: Request, res: Respon
     where: { email },
     select: {
       id: true,
-      name: true,
+      firstName: true,
+      lastName: true,
       email: true,
       role: true,
       twoFactorSecret: true,
@@ -113,13 +175,10 @@ export const verifyTwoFactorCode = asyncHandler(async (req: Request, res: Respon
     },
   });
 
-  if (!user) {
-    throw new AppError("Invalid email or code", 401);
-  }
+  if (!user) throw new AppError("Invalid email or code", 401);
 
-  if (!user.twoFactorSecret || !user.twoFactorCodeExpires) {
+  if (!user.twoFactorSecret || !user.twoFactorCodeExpires)
     throw new AppError("No active two-factor authentication request", 400);
-  }
 
   const now = new Date();
   const isValid = user.twoFactorSecret === code;
@@ -128,27 +187,25 @@ export const verifyTwoFactorCode = asyncHandler(async (req: Request, res: Respon
   if (!isValid || !isNotExpired) {
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        twoFactorSecret: null,
-        twoFactorCodeExpires: null,
-      },
+      data: { twoFactorSecret: null, twoFactorCodeExpires: null },
     });
 
-    if (!isNotExpired) {
-      throw new AppError("Two-factor code has expired", 401);
-    }
+    if (!isNotExpired) throw new AppError("Two-factor code has expired", 401);
     throw new AppError("Invalid two-factor code", 401);
   }
 
   await prisma.user.update({
     where: { id: user.id },
-    data: {
-      twoFactorSecret: null,
-      twoFactorCodeExpires: null,
-    },
+    data: { twoFactorSecret: null, twoFactorCodeExpires: null },
   });
 
-  const token = generateToken({ userId: user.id, role: user.role, name: user.name, email: user.email});
+  const token = generateToken({
+    userId: user.id,
+    role: user.role,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+  });
 
   res.status(200).json({
     success: true,
@@ -156,7 +213,8 @@ export const verifyTwoFactorCode = asyncHandler(async (req: Request, res: Respon
     token,
     user: {
       id: user.id,
-      name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
       email: user.email,
       role: user.role,
     },
@@ -165,16 +223,11 @@ export const verifyTwoFactorCode = asyncHandler(async (req: Request, res: Respon
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?.userId;
-  if (!userId) {
-    throw new AppError("Not authenticated", 401);
-  }
+  if (!userId) throw new AppError("Not authenticated", 401);
 
   await prisma.user.update({
     where: { id: userId },
-    data: {
-      twoFactorSecret: null,
-      twoFactorCodeExpires: null,
-    },
+    data: { twoFactorSecret: null, twoFactorCodeExpires: null },
   });
 
   res.status(200).json({
@@ -182,4 +235,3 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
     message: "Logged out successfully. Token should be cleared client-side.",
   });
 });
-

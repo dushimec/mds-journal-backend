@@ -18,10 +18,15 @@ export const validate = (req: Request, res: Response, next: NextFunction) => {
 };
 
 export const registerValidation = [
-  body("name")
+  body("firstName")
     .trim()
-    .notEmpty().withMessage("Name is required")
-    .isLength({ min: 2, max: 100 }).withMessage("Name must be between 2 and 100 characters"),
+    .notEmpty().withMessage("firstName is required")
+    .isLength({ min: 2, max: 100 }).withMessage("firstName must be between 2 and 100 characters"),
+  
+  body("lastName")
+    .trim()
+    .notEmpty().withMessage("lastName is required")
+    .isLength({ min: 2, max: 100 }).withMessage("lastName must be between 2 and 100 characters"),
 
   body("email")
     .trim()
@@ -35,7 +40,7 @@ export const registerValidation = [
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage("Password must contain at least one uppercase letter, one lowercase letter, and one number"),
 
-  body("role")
+  body("UserRole")
     .optional()
     .isIn(["AUTHOR", "EDITOR", "REVIEWER", "ADMIN", "READER"])
     .withMessage("Role must be one of: AUTHOR, EDITOR, REVIEWER, ADMIN, READER"),
@@ -65,4 +70,19 @@ export const verify2FAValidation = [
     .isLength({ min: 6, max: 6 }).withMessage("2FA code must be exactly 6 digits")
     .matches(/^\d+$/).withMessage("2FA code must contain only digits"),
 ];
+
+export const verifyEmailValidation = [
+  body("email")
+    .trim()
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Please provide a valid email")
+    .normalizeEmail(),
+
+  body("code")
+    .trim()
+    .notEmpty().withMessage("Verification code is required")
+    .isLength({ min: 6, max: 6 }).withMessage("Verification code must be exactly 6 digits")
+    .matches(/^\d+$/).withMessage("Verification code must contain only digits"),
+];
+
 export { matchedData };
