@@ -13,9 +13,6 @@ const getPagination = (req: Request) => {
 
 export class SubmissionController {
   static create = asyncHandler(async (req: Request, res: Response) => {
-    // if (req.user?.role !== UserRole.AUTHOR) {
-    //   throw new AppError("Only authors can submit", 403);
-    // }
     const data = matchedData(req);
     const authors = (data as any).authors || [];
     const files = (data as any).files || [];
@@ -24,7 +21,6 @@ export class SubmissionController {
     const submission = await prisma.submission.create({
       data: {
         ...data,
-        // userId: req.user.userId,
         status: SubmissionStatus.DRAFT,
         authors: { create: authors },
         files: { create: files.map((f: any) => ({ ...f, fileType: f.fileType || FileType.MANUSCRIPT })) },
@@ -42,7 +38,7 @@ export class SubmissionController {
   });
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
-    const where = req.user?.role === UserRole.AUTHOR ? { userId: req.user.userId } : {};
+    const where = req.user?.role === UserRole.ADMIN ? { userId: req.user.userId } : {};
     const { skip, take, page } = getPagination(req);
     const total = await prisma.submission.count({ where });
 
@@ -67,7 +63,7 @@ export class SubmissionController {
   });
 
   static getById = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = matchedData(req);
+    const { id } = req.params;
     const submission = await prisma.submission.findUnique({
       where: { id: String(id) },
       include: {
@@ -87,7 +83,8 @@ export class SubmissionController {
   });
 
   static update = asyncHandler(async (req: Request, res: Response) => {
-    const { id, ...data } = matchedData(req);
+    const {...data } = matchedData(req);
+    const {id} = req.params
     const submission = await prisma.submission.findUnique({ where: { id: String(id) } });
 
     if (!submission) throw new AppError("Submission not found", 404);
@@ -110,7 +107,7 @@ export class SubmissionController {
     const submission = await prisma.submission.findUnique({ where: { id: String(id) } });
 
     if (!submission) throw new AppError("Submission not found", 404);
-    if (req.user?.role === UserRole.AUTHOR && submission.userId !== req.user.userId) {
+    if (req.user?.role === UserRole.ADMIN && submission.userId !== req.user.userId) {
       throw new AppError("Access denied", 403);
     }
 
@@ -119,7 +116,7 @@ export class SubmissionController {
   });
 
   static stats = asyncHandler(async (req: Request, res: Response) => {
-    const where = req.user?.role === UserRole.AUTHOR ? { userId: req.user.userId } : {};
+    const where = req.user?.role === UserRole.ADMIN ? { userId: req.user.userId } : {};
     const total = await prisma.submission.count({ where });
     const byStatus = await prisma.submission.groupBy({ by: ["status"], where, _count: true });
 
