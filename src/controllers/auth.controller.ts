@@ -86,6 +86,41 @@ export const verifyEmailCode = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
+export const resendVerificationCode = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = matchedData(req);
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) throw new AppError("User not found", 404);
+
+  if (user.emailVerified) {
+    throw new AppError("Email is already verified", 400);
+  }
+
+  const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailVerificationCode: newCode,
+      emailVerificationExpires: expiresAt,
+    },
+  });
+
+  try {
+    await sendEmailVerificationCode(email, newCode);
+  } catch (err) {
+    logger.error(`Failed to send verification email: ${err}`);
+    throw new AppError("Failed to send verification code. Please try again later.", 500);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "A new verification code has been sent to your email.",
+  });
+});
+
+
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = matchedData(req);
 
