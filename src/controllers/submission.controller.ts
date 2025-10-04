@@ -13,36 +13,66 @@ const getPagination = (req: Request) => {
 
 export class SubmissionController {
   static create = asyncHandler(async (req: Request, res: Response) => {
-    if (req.user?.role !== UserRole.AUTHOR) {
-       throw new AppError("Only authors can submit", 403);
-     }
-    const data = matchedData(req);
-    const authors = (data as any).authors || [];
-    const files = (data as any).files || [];
-    const declarations = (data as any).declarations || [];
+   if (req.user?.role !== UserRole.AUTHOR) {
+  throw new AppError("Only authors can submit, please login!", 403);
+}
 
+
+     const data = matchedData(req);
     const submission = await prisma.submission.create({
-      data: {
-        ...data,
-        userId: req.user.userId,
-        status: SubmissionStatus.DRAFT,
-        authors: { create: authors },
-        files: { create: files.map((f: any) => ({ ...f, fileType: f.fileType || FileType.MANUSCRIPT })) },
-        declarations: {
-          create: declarations.map((d: any) => ({
-            ...d,
-            type: d.type || DeclarationType.ETHICAL_CONDUCT,
-          })),
-        },
+    data: {
+      manuscriptTitle: data.manuscriptTitle,
+      abstract: data.abstract,
+      category: data.category,
+      keywords: data.keywords,
+      status: "DRAFT",
+      userId: req.user?.userId ?? null,
+
+      authors: {
+        create: data.authors.map((a: any) => ({
+          fullName: a.fullName,
+          email: a.email,
+          affiliation: a.affiliation,
+          isCorresponding: a.isCorresponding,
+          order: a.order,
+          userId: req.user?.userId ?? null,
+        })),
       },
-      include: { authors: true, files: true, declarations: true },
-    });
+
+      files: {
+        create: data.files.map((f: any) => ({
+          fileName: f.fileName,
+          fileType: f.fileType,
+          fileUrl: f.fileUrl,
+          mimeType: f.mimeType,
+          fileSize: f.fileSize,
+        })),
+      },
+
+      declarations: {
+        create: data.declarations.map((d: any) => ({
+          type: d.type,
+          isChecked: d.isChecked,
+          text: d.text,
+        })),
+      },
+    },
+    include: {
+      authors: true,
+      files: true,
+      declarations: true,
+    },
+  });
 
     res.status(201).json({ success: true, data: submission });
   });
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
+  
     const where = req.user?.role === UserRole.ADMIN ? { userId: req.user.userId } : {};
+       if (req.user?.role !== UserRole.ADMIN) {
+  throw new AppError("Only admin, please login as ADMIN!", 403);
+}
     const { skip, take, page } = getPagination(req);
     const total = await prisma.submission.count({ where });
 
@@ -79,8 +109,8 @@ export class SubmissionController {
     });
 
     if (!submission) throw new AppError("Submission not found", 404);
-    if (req.user?.role === UserRole.AUTHOR && submission.userId !== req.user.userId) {
-      throw new AppError("Access denied", 403);
+    if (req.user?.role === UserRole.ADMIN && submission.userId !== req.user.userId) {
+      throw new AppError("Access denied, ADMIN only can access!", 403);
     }
 
     res.json({ success: true, data: submission });

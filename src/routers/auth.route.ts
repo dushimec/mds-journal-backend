@@ -1,16 +1,39 @@
 import { Router } from "express";
-import { registerValidation, validate, verifyEmailValidation } from "../middlewares/validations/authValidation";
+import {
+  registerValidation,
+  validate,
+  verifyEmailValidation,
+} from "../middlewares/validations/authValidation";
 const route = Router();
 import * as authController from "../controllers/auth.controller";
 import { authenticate } from "../middlewares/authMiddleware";
-import { loginValidation, verify2FAValidation,ResendCodeValidation } from "../middlewares/validations/authValidation";
+import {
+  loginValidation,
+  verify2FAValidation,
+  ResendCodeValidation,
+} from "../middlewares/validations/authValidation";
 
 route
-    .post("/register", registerValidation,validate,authController.register)
-    .post("/resend-code", ResendCodeValidation,validate,authController.resendVerificationCode)
-    .post("/login", loginValidation, validate, authController.login)
-    .post("/verify-2fa", verify2FAValidation, validate, authController.verifyTwoFactorCode)
-    .post("/verify-email",verifyEmailValidation, validate, authController.verifyEmailCode)
-    .post("/logout", authenticate, authController.logout);
+  .post("/register", registerValidation, validate, authController.register)
+  .post(
+    "/resend-code",
+    ResendCodeValidation,
+    validate,
+    authController.resendVerificationCode
+  )
+  .post("/login", loginValidation, validate, authController.login)
+  .post(
+    "/verify-2fa",
+    verify2FAValidation,
+    validate,
+    authController.verifyTwoFactorCode
+  )
+  .post(
+    "/verify-email",
+    verifyEmailValidation,
+    validate,
+    authController.verifyEmailCode
+  )
+  .post("/logout", authenticate, authController.logout);
 
 export default route;
