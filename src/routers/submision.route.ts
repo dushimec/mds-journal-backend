@@ -6,7 +6,7 @@ const router = Router()
 
 router
     .get("/", SubmissionController.getAll)
-    .post("/", authenticate, SubmissionController.create)
+    .post("/",  SubmissionController.create)
     .get("/:id", authenticate, SubmissionController.getById)
     .put("/:id", authenticate, SubmissionController.update)
     .delete("/:id", authenticate, SubmissionController.delete)

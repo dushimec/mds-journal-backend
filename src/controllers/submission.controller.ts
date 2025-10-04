@@ -13,9 +13,9 @@ const getPagination = (req: Request) => {
 
 export class SubmissionController {
   static create = asyncHandler(async (req: Request, res: Response) => {
-    if (req.user?.role !== UserRole.AUTHOR) {
-      throw new AppError("Only authors can submit", 403);
-    }
+    // if (req.user?.role !== UserRole.AUTHOR) {
+    //   throw new AppError("Only authors can submit", 403);
+    // }
     const data = matchedData(req);
     const authors = (data as any).authors || [];
     const files = (data as any).files || [];
@@ -24,7 +24,7 @@ export class SubmissionController {
     const submission = await prisma.submission.create({
       data: {
         ...data,
-        userId: req.user.userId,
+        // userId: req.user.userId,
         status: SubmissionStatus.DRAFT,
         authors: { create: authors },
         files: { create: files.map((f: any) => ({ ...f, fileType: f.fileType || FileType.MANUSCRIPT })) },
