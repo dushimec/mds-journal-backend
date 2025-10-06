@@ -48,7 +48,6 @@ model Submission {
   status          SubmissionStatus @default(DRAFT)
   manuscriptTitle String?
   abstract        String?
-  category        String?
   keywords        String?
   submittedAt     DateTime?
   createdAt       DateTime @default(now())
@@ -60,6 +59,9 @@ model Submission {
 
   userId          String?
   user            User? @relation("UserSubmissions", fields: [userId], references: [id])
+
+  topicId         String?
+  topic           Topic?    @relation(fields: [topicId], references: [id])
 }
 
 enum SubmissionStatus {
@@ -166,13 +168,15 @@ model Article {
   views       Int      @default(0)
   downloads   Int      @default(0)
   pdfUrl      String?
-  category    String
   keywords    String
   isHighlighted Boolean @default(false)
   order       Int      @default(0)
 
   issueId     String?
   issue       JournalIssue? @relation(fields: [issueId], references: [id])
+
+  topicId     String?
+  topic       Topic?    @relation(fields: [topicId], references: [id])
 
   createdAt   DateTime @default(now())
 }
@@ -270,4 +274,14 @@ model JournalSettings {
   issn      String?
   logoUrl   String?
   updatedAt DateTime @updatedAt
+}
+
+model Topic {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submissions Submission[]
+  articles    Article[]
 }

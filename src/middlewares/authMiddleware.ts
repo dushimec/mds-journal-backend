@@ -1,15 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken, JwtPayload } from "../utils/token";
 import { AppError } from "../utils/appError";
+import { UserRole } from "@prisma/client";
 
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: JwtPayload & { role: string; userId: string }; // Ensure userId & role exist
-    }
-  }
-}
+
 
 export const authenticate = (
   req: Request,
@@ -26,7 +21,10 @@ export const authenticate = (
 
     const decoded = verifyToken(token);
 
-    req.user = decoded as JwtPayload & { role: string; userId: string };
+    req.user = {
+      userId: decoded.userId,
+      role: decoded.role as UserRole,
+    };
 
     next();
   } catch (error: any) {
