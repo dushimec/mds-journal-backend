@@ -75,7 +75,7 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
       data: {
         manuscriptTitle: data.manuscriptTitle,
         abstract: data.abstract,
-        category: data.category,
+        topicId: data.topicId,
         keywords: data.keywords,
         status: SubmissionStatus.DRAFT,
         userId: req.user?.userId ?? null,
