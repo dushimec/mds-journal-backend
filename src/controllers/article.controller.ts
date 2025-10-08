@@ -5,7 +5,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
 import { UserRole } from "@prisma/client";
 import multer from "multer";
-import { cloudinary } from "../config/cloudinary";
+import  cloudinary  from "../config/cloudinary";
 
 const getPagination = (req: Request) => {
   const page = Math.max(1, parseInt((req.query.page as string) || "1"));
@@ -152,7 +152,9 @@ export class ArticleController {
               resolve(result);
             }
           );
-          stream.end(req.file.buffer);
+          if (req.file && req.file.buffer) {
+            stream.end(req.file.buffer);
+          }
         });
         data.pdfUrl = uploadResult.secure_url;
       }

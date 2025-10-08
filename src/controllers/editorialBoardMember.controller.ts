@@ -4,7 +4,7 @@ import { prisma } from "../config/database";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
 import multer from "multer";
-import { cloudinary } from "../config/cloudinary";
+import  cloudinary  from "../config/cloudinary";
 import { UserRole } from "@prisma/client"; // Make sure this import matches your project
 
 const upload = multer({ storage: multer.memoryStorage() });

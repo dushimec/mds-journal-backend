@@ -16,6 +16,7 @@ const router = Router();
 router
   .get(
     "/",
+    authenticate,
     getAllSubmissionsValidation,
     validate,
     SubmissionController.getAll
