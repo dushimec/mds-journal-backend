@@ -37,7 +37,7 @@ export class ArticleController {
         isHighlighted,
         order,
         issueId,
-      } = req.body
+      } = matchedData(req);
 
       if (!title || !authors || !publishedAt || !topicId || !keywords) {
         throw new AppError("Missing required fields", 400);
@@ -272,7 +272,7 @@ export class ArticleController {
     ) {
       throw new AppError("Only ADMIN or EDITOR can create issues", 403);
     }
-    const { title, volume, number, year, publishedAt, description } = req.body;
+    const { title, volume, number, year, publishedAt, description } = matchedData(req);
 
     if (!title || !volume || !number || !year || !publishedAt) {
       throw new AppError("Missing required fields", 400);
