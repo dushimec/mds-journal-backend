@@ -16,6 +16,7 @@ route.use("/submission", submisionRoute);
 route.use("/articles", ArticleRouter);
 route.use("/topic", topicRoute);
 route.use("/editorial-board-member", EditorialBoardMemberRoute);
+route.use("/about-section", aboutSectionRoute);
 
 
 route.use(globalErrorHandler)
