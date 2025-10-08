@@ -52,7 +52,7 @@ export class ArticleController {
             pdfUrl = result.secure_url;
           }
         );
-        result.end(req.file.buffer);
+        result.end(req.file);
         await new Promise((resolve) => result.on("finish", resolve));
       }
 
@@ -152,7 +152,7 @@ export class ArticleController {
               resolve(result);
             }
           );
-          stream.end(req.file.buffer);
+          stream.end(req.file);
         });
         data.pdfUrl = uploadResult.secure_url;
       }
