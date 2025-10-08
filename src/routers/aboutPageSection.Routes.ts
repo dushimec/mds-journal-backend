@@ -7,11 +7,12 @@ import {
   updateSection,
 } from "../controllers/aboutPageSection.Controller";
 import { sectionValidation } from "../middlewares/validations/aboutSectionValidator";
+import { authenticate } from "../middlewares/authMiddleware";
 
 const aboutSectionRoute = Router();
 
 aboutSectionRoute
-  .post("/", sectionValidation, createSection)
+  .post("/", sectionValidation, authenticate, createSection)
   .get("/", getAllSections)
   .get("/:id", getSectionById)
   .put("/:id", sectionValidation, updateSection)
