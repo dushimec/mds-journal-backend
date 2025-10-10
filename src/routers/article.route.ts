@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import { ArticleController } from "../controllers/article.controller";
 import { authenticate } from "../middlewares/authMiddleware";
@@ -9,6 +10,10 @@ import {
   getByIdArticleValidation,
   validate,
   createIssueValidation,
+  bulkDeleteArticlesValidation,
+  incrementViewsValidation,
+  incrementDownloadsValidation,
+  getIssueStatsValidation,
 } from "../middlewares/validations/articleValidation";
 
 const router = Router();
@@ -50,14 +55,21 @@ router
   )
   .post(
     "/bulk-delete",
+    authenticate,
+    bulkDeleteArticlesValidation,
+    validate,
     ArticleController.bulkDelete
   )
   .post(
         "/:id/views",
+    incrementViewsValidation,
+    validate,
     ArticleController.incrementViews
   )
   .post(
     "/:id/downloads",
+    incrementDownloadsValidation,
+    validate,
     ArticleController.incrementDownloads
   )
   .get(
@@ -67,6 +79,8 @@ router
   .get(
     "/issue/:issueId/stats",
     authenticate,
+    getIssueStatsValidation,
+    validate,
     ArticleController.issueStats
   )
   .post(
