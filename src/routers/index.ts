@@ -12,6 +12,7 @@ import faqRoute from './faq.route';
 import newsletterRoute from './newsletter.route';
 import { requestLogger } from "../middlewares/requestLogger";
 import { globalErrorHandler } from "../utils/ErrorHandler"
+import aboutSectionRoute from "./aboutPageSection.Routes";
 
 route.use(requestLogger);
 
@@ -25,6 +26,7 @@ route.use("/contact-info", contactInfoRoute);
 route.use("/faqs", faqRoute);
 route.use("/newsletter", newsletterRoute);
 
+route.use("/about-section", aboutSectionRoute);
 
 
 route.use(globalErrorHandler)

@@ -6,6 +6,7 @@ import { logger } from "./utils/logger";
 import { Server, createServer } from "http";
 import { connectDB } from "./config/database";
 import mainRoute from "./routers/index";
+import aboutSectionRoute from "./routers/aboutPageSection.Routes";
 
 dotenv.config();
 const app = express();
@@ -23,6 +24,7 @@ const server: Server = createServer(app);
 const PORT = Number(process.env.PORT) || 5000;
 
 const api = process.env.API_URL;
+app.use("/about-sections", aboutSectionRoute)
 app.use(`${api}`, mainRoute);
 
 (async () => {
