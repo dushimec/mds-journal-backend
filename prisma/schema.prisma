@@ -32,7 +32,6 @@ model User {
   authoredSubmissions      Submission[] @relation("UserSubmissions")
   authorRecords            Author[]     @relation("UserAuthors")
   contactMessages          ContactMessage[]
-  newsletterSubscriptions  NewsletterSubscriber[]
 }
 
 
@@ -259,12 +258,19 @@ model ContactMessage {
 }
 
 model NewsletterSubscriber {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  subscribedAt  DateTime @default(now())
+  id                  String       @id @default(cuid())
+  email               String       @unique
+  subscribedAt        DateTime     @default(now())
+  receivedNewsletters Newsletter[] @relation("NewsletterToSubscriber")
+}
 
-  userId        String?
-  user          User? @relation(fields: [userId], references: [id])
+model Newsletter {
+  id           String                 @id @default(cuid())
+  title        String
+  content      String                 @db.Text
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  recipients   NewsletterSubscriber[] @relation("NewsletterToSubscriber")
 }
 
 model JournalSettings {

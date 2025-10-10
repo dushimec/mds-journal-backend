@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   next();
 });
 const server: Server = createServer(app);
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 const api = process.env.API_URL;
 app.use(`${api}`, mainRoute);
@@ -28,7 +28,7 @@ app.use(`${api}`, mainRoute);
 (async () => {
     try {
         await connectDB();
-        server.listen(PORT, () => logger.info(`Server running on port ${PORT}, and API_URL ${api}`));
+        server.listen(PORT, "0.0.0.0", () => logger.info(`Server running on port ${PORT}, and API_URL ${api}`));
     } catch (error) {
         logger.error("Failed to connect to the database, server not started.");
         process.exit(1);
