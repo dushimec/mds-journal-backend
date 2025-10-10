@@ -7,6 +7,7 @@ import topicRoute from "../routers/topic.route";
 import EditorialBoardMemberRoute from "../routers/editorialBoardMember.route";
 import { requestLogger } from "../middlewares/requestLogger";
 import { globalErrorHandler } from "../utils/ErrorHandler"
+import aboutSectionRoute from "./aboutPageSection.Routes";
 
 route.use(requestLogger);
 
@@ -15,7 +16,7 @@ route.use("/submission", submisionRoute);
 route.use("/articles", ArticleRouter);
 route.use("/topic", topicRoute);
 route.use("/editorial-board-member", EditorialBoardMemberRoute);
-
+route.use("/about-section", aboutSectionRoute);
 
 
 route.use(globalErrorHandler)
