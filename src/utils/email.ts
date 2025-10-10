@@ -1,3 +1,4 @@
+
 import nodemailer from "nodemailer";
 import { logger } from "./logger";
 
@@ -44,5 +45,22 @@ export const sendEmailVerificationCode = async (email: string, code: string) => 
   } catch (err) {
     logger.error(`Failed to send verification email to ${email}`, err);
     throw new Error("Failed to send verification email");
+  }
+};
+
+export const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      html,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info(`Email sent to ${to}`);
+  } catch (err) {
+    logger.error(`Failed to send email to ${to}`, err);
+    throw new Error("Failed to send email");
   }
 };
