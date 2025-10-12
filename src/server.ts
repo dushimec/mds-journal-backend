@@ -1,4 +1,4 @@
-import "./types"
+import "./types";
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -6,7 +6,6 @@ import { logger } from "./utils/logger";
 import { Server, createServer } from "http";
 import { connectDB } from "./config/database";
 import mainRoute from "./routers/index";
-import aboutSectionRoute from "./routers/aboutPageSection.Routes";
 
 dotenv.config();
 const app = express();
@@ -20,12 +19,13 @@ app.use((req, res, next) => {
   res.setTimeout(5 * 60 * 1000);
   next();
 });
+
 const server: Server = createServer(app);
 const PORT = Number(process.env.PORT) || 5000;
 
-const api = process.env.API_URL;
-app.use("/about-sections", aboutSectionRoute)
-app.use(`${api}`, mainRoute);
+const api = process.env.API_URL || '/api';
+
+app.use(api, mainRoute);
 
 (async () => {
     try {
