@@ -20,6 +20,10 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get('/', (req, res) => {
+    res.send('Welcome to the MDS API');
+});
+
 const server: Server = createServer(app);
 const PORT = Number(process.env.PORT) || 5000;
 

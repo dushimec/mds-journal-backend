@@ -1,0 +1,33 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const route = (0, express_1.Router)();
+const auth_route_1 = __importDefault(require("./auth.route"));
+const submision_route_1 = __importDefault(require("./submision.route"));
+const article_route_1 = __importDefault(require("./article.route"));
+const topic_route_1 = __importDefault(require("./topic.route"));
+const editorialBoardMember_route_1 = __importDefault(require("./editorialBoardMember.route"));
+const contactMessage_route_1 = __importDefault(require("./contactMessage.route"));
+const contactInfo_route_1 = __importDefault(require("./contactInfo.route"));
+const faq_route_1 = __importDefault(require("./faq.route"));
+const newsletter_route_1 = __importDefault(require("./newsletter.route"));
+const requestLogger_1 = require("../middlewares/requestLogger");
+const ErrorHandler_1 = require("../utils/ErrorHandler");
+const aboutPageSection_Routes_1 = __importDefault(require("./aboutPageSection.Routes"));
+route.use(requestLogger_1.requestLogger);
+route.use("/auth", auth_route_1.default);
+route.use("/submission", submision_route_1.default);
+route.use("/articles", article_route_1.default);
+route.use("/topic", topic_route_1.default);
+route.use("/editorial-board-member", editorialBoardMember_route_1.default);
+route.use("/contact-messages", contactMessage_route_1.default);
+route.use("/contact-info", contactInfo_route_1.default);
+route.use("/faqs", faq_route_1.default);
+route.use("/newsletter", newsletter_route_1.default);
+route.use("/about-sections", aboutPageSection_Routes_1.default);
+route.use(ErrorHandler_1.globalErrorHandler);
+exports.default = route;
+//# sourceMappingURL=index.js.map
