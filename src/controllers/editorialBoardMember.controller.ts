@@ -19,6 +19,10 @@ export class EditorialBoardMemberController {
         throw new AppError("Only ADMIN can add editorial board members", 403);
       }
 
+      if (!req.file) {
+        throw new AppError("Profile image is required", 400);
+      }
+
       const {
         fullName,
         role,
@@ -45,6 +49,10 @@ export class EditorialBoardMemberController {
           }
         });
         profileImage = uploadResult.secure_url;
+      }
+      
+      if (!profileImage) {
+        throw new AppError("Profile image upload failed", 500);
       }
 
       const member = await prisma.editorialBoardMember.create({
