@@ -137,6 +137,7 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
         files: true,
         declarations: true,
         user: { select: { firstName: true, lastName: true, email: true } },
+        topic: true,
       },
     });
 
@@ -157,6 +158,7 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
         files: true,
         declarations: true,
         user: { select: { firstName: true, lastName: true, email: true } },
+        topic: true,
       },
     });
 

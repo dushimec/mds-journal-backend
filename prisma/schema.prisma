@@ -32,8 +32,8 @@ model User {
   authoredSubmissions      Submission[] @relation("UserSubmissions")
   authorRecords            Author[]     @relation("UserAuthors")
   contactMessages          ContactMessage[]
+  activityLogs             ActivityLog[]
 }
-
 
 enum UserRole {
   AUTHOR
@@ -290,4 +290,13 @@ model Topic {
 
   submissions Submission[]
   articles    Article[]
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   Json?
+  timestamp DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 }
