@@ -27,7 +27,7 @@ export class EditorialBoardMemberController {
         email,
         order,
         isActive,
-      } = matchedData(req);
+      } = req.body;
 
       let profileImage: string | undefined = undefined;
       if (req.file?.buffer) {
@@ -58,8 +58,8 @@ export class EditorialBoardMemberController {
           affiliation,
           bio,
           email,
-          order: order ?? 0,
-          isActive: isActive ?? true,
+          order: parseInt(order, 10) || 0,
+          isActive: isActive === 'true',
           profileImage,
         },
       });
