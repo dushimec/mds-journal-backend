@@ -122,9 +122,6 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
 
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
-    if (req.user?.role !== UserRole.ADMIN) {
-      throw new AppError("Only admin, please login as ADMIN!", 403);
-    }
 
     const { skip, take, page } = getPagination(req);
     const total = await prisma.submission.count();

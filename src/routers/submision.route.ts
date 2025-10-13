@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { SubmissionController } from "../controllers/submission.controller";
-import { authenticate } from "../middlewares/authMiddleware";
+import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
 import { upload } from "../middlewares/upload"; 
 import {
   createSubmissionValidation,
@@ -10,6 +10,7 @@ import {
   updateSubmissionValidation,
   validate,
 } from "../middlewares/validations/submissionValidation";
+import { UserRole } from "@prisma/client";
 
 const router = Router();
 
@@ -47,6 +48,7 @@ router
     "/:id",
     authenticate,
     getByIdSubmissionValidation,
+      authorizeRoles(UserRole.ADMIN),
     validate,
     SubmissionController.getById
   )

@@ -3,9 +3,6 @@ import { verifyToken, JwtPayload } from "../utils/token";
 import { AppError } from "../utils/appError";
 import { UserRole } from "@prisma/client";
 
-
-
-
 export const authenticate = (
   req: Request,
   res: Response,
