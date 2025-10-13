@@ -79,6 +79,7 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
         keywords: data.keywords,
         status: SubmissionStatus.DRAFT,
         userId: req.user?.userId ?? null,
+        submittedAt: new Date(),
 
         authors: {
           create: data.authors.map((a: any) => ({
