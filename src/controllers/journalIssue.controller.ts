@@ -66,8 +66,6 @@ export const deleteJournalIssue = asyncHandler(async (req: Request, res: Respons
 export const getJournalIssueStats = asyncHandler(async (req: Request, res: Response) => {
     const totalIssues = await prisma.journalIssue.count();
     const specialIssues = await prisma.journalIssue.count({ where: { isSpecial: true } });
-    const publishedIssues = await prisma.journalIssue.count({ where: { isPublished: true } });
-    const unpublishedIssues = await prisma.journalIssue.count({ where: { isPublished: false } });
     const totalArticles = await prisma.journalIssue.aggregate({
         _sum: {
             articleCount: true
@@ -79,8 +77,6 @@ export const getJournalIssueStats = asyncHandler(async (req: Request, res: Respo
         data: {
             totalIssues,
             specialIssues,
-            publishedIssues,
-            unpublishedIssues,
             totalArticles: totalArticles._sum.articleCount || 0,
         },
     });
