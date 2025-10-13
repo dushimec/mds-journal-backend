@@ -163,9 +163,6 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
     if (!submission) throw new AppError("Submission not found", 404);
 
 
-    if (req.user?.role === UserRole.ADMIN && submission.userId !== req.user.userId) {
-      throw new AppError("Access denied, ADMIN only can access!", 403);
-    }
 
     res.json({ success: true, data: submission });
   });
@@ -201,9 +198,6 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
     const submission = await prisma.submission.findUnique({ where: { id: String(id) } });
 
     if (!submission) throw new AppError("Submission not found", 404);
-    if (req.user?.role !== UserRole.ADMIN) {
-      throw new AppError("Access denied, Admin only should delete submissions! ", 403);
-    }
 
     await prisma.submission.delete({ where: { id: String(id) } });
     res.json({ success: true, message: "Submission deleted" });

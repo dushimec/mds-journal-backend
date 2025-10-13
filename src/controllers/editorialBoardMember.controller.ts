@@ -13,12 +13,7 @@ export class EditorialBoardMemberController {
   static create = [
     upload.single("profileImage"),
     asyncHandler(async (req: Request, res: Response) => {
-      if (
-        req.user?.role !== UserRole.ADMIN 
-      ) {
-        throw new AppError("Only ADMIN can add editorial board members", 403);
-      }
-
+    
       if (!req.file) {
         throw new AppError("Profile image is required", 400);
       }
