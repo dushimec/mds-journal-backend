@@ -26,7 +26,7 @@ route.use("/contact-messages", contactMessageRoute);
 route.use("/contact-info", contactInfoRoute);
 route.use("/faqs", faqRoute);
 route.use("/newsletter", newsletterRoute);
-route.use("/about-sections", aboutSectionRoute);
+route.use("/about-section", aboutSectionRoute);
 route.use("/home-page", homePageRouter);
 route.use("/issues", journalIssueRoute);
 
