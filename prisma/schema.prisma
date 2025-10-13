@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -61,6 +62,9 @@ model Submission {
 
   topicId         String?
   topic           Topic?    @relation(fields: [topicId], references: [id])
+
+  journalIssueId  String?
+  journalIssue    JournalIssue? @relation(fields: [journalIssueId], references: [id])
 }
 
 enum SubmissionStatus {
@@ -157,29 +161,6 @@ enum AboutSection {
   JOIN_OUR_COMMUNITY
 }
 
-model Article {
-  id          String   @id @default(cuid())
-  title       String
-  authors     String
-  abstract    String?
-  publishedAt DateTime
-  doi         String?
-  views       Int      @default(0)
-  downloads   Int      @default(0)
-  pdfUrl      String?
-  keywords    String
-  isHighlighted Boolean @default(false)
-  order       Int      @default(0)
-
-  issueId     String?
-  issue       JournalIssue? @relation(fields: [issueId], references: [id])
-
-  topicId     String?
-  topic       Topic?    @relation(fields: [topicId], references: [id])
-
-  createdAt   DateTime @default(now())
-}
-
 model JournalIssue {
   id            String   @id @default(cuid())
   issueNumber   Int
@@ -192,10 +173,8 @@ model JournalIssue {
   articleCount  Int      @default(0)
   downloads     Int      @default(0)
   publishedAt   DateTime @default(now())
-
-  articles      Article[]
-
   createdAt     DateTime @default(now())
+  submissions   Submission[]
 }
 
 model EditorialBoardMember {
@@ -289,7 +268,6 @@ model Topic {
   updatedAt DateTime @updatedAt
 
   submissions Submission[]
-  articles    Article[]
 }
 
 model ActivityLog {
@@ -299,4 +277,11 @@ model ActivityLog {
   timestamp DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model AuthorPage {
+  id      String @id @default("author-page")
+  title   String
+  tagline String
+  updatedAt DateTime @updatedAt
 }
