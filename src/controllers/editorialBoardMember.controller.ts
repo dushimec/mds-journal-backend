@@ -14,9 +14,6 @@ export class EditorialBoardMemberController {
     upload.single("profileImage"),
     asyncHandler(async (req: Request, res: Response) => {
     
-      if (!req.file) {
-        throw new AppError("Profile image is required", 400);
-      }
 
       const {
         fullName,
@@ -46,9 +43,7 @@ export class EditorialBoardMemberController {
         profileImage = uploadResult.secure_url;
       }
       
-      if (!profileImage) {
-        throw new AppError("Profile image upload failed", 500);
-      }
+     
 
       const member = await prisma.editorialBoardMember.create({
         data: {
