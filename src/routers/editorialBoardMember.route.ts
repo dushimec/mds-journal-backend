@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { EditorialBoardMemberController } from "../controllers/editorialBoardMember.controller";
-import { authenticate } from "../middlewares/authMiddleware";
+import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
 import {
   createEditorialBoardMemberValidation,
   updateEditorialBoardMemberValidation,
@@ -8,6 +8,7 @@ import {
   getByIdEditorialBoardMemberValidation,
   validate,
 } from "../middlewares/validations/editorialBoardMemberValidation";
+import { UserRole } from "@prisma/client";
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router
   )
   .post(
     "/",
-    authenticate,
+    authenticate, authorizeRoles(UserRole.ADMIN),
     createEditorialBoardMemberValidation,
     validate,
     ...EditorialBoardMemberController.create
@@ -31,14 +32,14 @@ router
   )
   .put(
     "/:id",
-    authenticate,
+    authenticate, authorizeRoles(UserRole.ADMIN),
     updateEditorialBoardMemberValidation,
     validate,
     ...EditorialBoardMemberController.update
   )
   .delete(
     "/:id",
-    authenticate,
+    authenticate, authorizeRoles(UserRole.ADMIN),
     deleteEditorialBoardMemberValidation,
     validate,
     EditorialBoardMemberController.delete

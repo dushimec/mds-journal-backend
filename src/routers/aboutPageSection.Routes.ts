@@ -7,15 +7,16 @@ import {
   updateSection,
 } from "../controllers/aboutPageSection.Controller";
 import { sectionValidation } from "../middlewares/validations/aboutSectionValidator";
-import { authenticate } from "../middlewares/authMiddleware";
+import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
+import { UserRole } from "@prisma/client";
 
 const aboutSectionRoute = Router();
 
 aboutSectionRoute
-  .post("/", sectionValidation, authenticate, createSection)
+  .post("/", sectionValidation, authenticate, authorizeRoles(UserRole.ADMIN),createSection)
   .get("/", getAllSections)
   .get("/:id", getSectionById)
-  .put("/:id", sectionValidation, updateSection)
-  .delete("/:id", deleteSection);
+  .put("/:id", sectionValidation,authenticate, authorizeRoles(UserRole.ADMIN), updateSection)
+  .delete("/:id",authenticate, authorizeRoles(UserRole.ADMIN), deleteSection);
 
 export default aboutSectionRoute;

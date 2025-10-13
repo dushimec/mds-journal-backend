@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { SubmissionController } from "../controllers/submission.controller";
-import { authenticate } from "../middlewares/authMiddleware";
+import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
 import { upload } from "../middlewares/upload"; 
 import {
   createSubmissionValidation,
@@ -10,6 +10,7 @@ import {
   updateSubmissionValidation,
   validate,
 } from "../middlewares/validations/submissionValidation";
+import { UserRole } from "@prisma/client";
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router
   )
   .post(
     "/",
-    authenticate,
+    authenticate,authorizeRoles(UserRole.AUTHOR),
     createSubmissionValidation,
     validate,
     SubmissionController.create
@@ -30,7 +31,7 @@ router
   // Single file
   .post(
   "/upload",
-  authenticate,
+  authenticate,authorizeRoles(UserRole.AUTHOR),
   upload.single("file"),
   SubmissionController.uploadFile
   )
@@ -38,7 +39,7 @@ router
 // Multiple files
   .post(
   "/upload-multiple",
-  authenticate,
+  authenticate,authorizeRoles(UserRole.AUTHOR),
   upload.array("files", 5), // max 5 files
   SubmissionController.uploadFiles
    )
@@ -47,6 +48,7 @@ router
     "/:id",
     authenticate,
     getByIdSubmissionValidation,
+      authorizeRoles(UserRole.ADMIN),
     validate,
     SubmissionController.getById
   )
@@ -59,11 +61,11 @@ router
   )
   .delete(
     "/:id",
-    authenticate,
+    authenticate,authorizeRoles(UserRole.ADMIN),
     deleteSubmissionValidation,
     validate,
     SubmissionController.delete
   )
-  .get("/stats", authenticate, SubmissionController.stats);
+  .get("/stats", SubmissionController.stats);
 
 export default router;

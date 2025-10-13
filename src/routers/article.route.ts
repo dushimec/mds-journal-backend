@@ -1,7 +1,7 @@
 
 import { Router } from "express";
 import { ArticleController } from "../controllers/article.controller";
-import { authenticate } from "../middlewares/authMiddleware";
+import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
 import {
   createArticleValidation,
   updateArticleValidation,
@@ -15,6 +15,7 @@ import {
   incrementDownloadsValidation,
   getIssueStatsValidation,
 } from "../middlewares/validations/articleValidation";
+import { UserRole } from "@prisma/client";
 
 const router = Router();
 
@@ -85,7 +86,7 @@ router
   )
   .post(
     "/issue",
-    authenticate,
+    authenticate, authorizeRoles(UserRole.ADMIN),
     createIssueValidation,
     validate,
     ArticleController.createIssue
