@@ -17,6 +17,7 @@ const router = Router();
 router
   .get(
     "/",
+    authenticate,authorizeRoles(UserRole.ADMIN),
     getAllSubmissionsValidation,
     validate,
     SubmissionController.getAll
