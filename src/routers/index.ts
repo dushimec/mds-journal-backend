@@ -2,6 +2,7 @@
 import { Router } from "express";
 const route = Router();
 import authRoute from "./auth.route";
+import userRoute from "./user.route";
 import submisionRoute from "./submision.route";
 import topicRoute from "./topic.route";
 import EditorialBoardMemberRoute from "./editorialBoardMember.route";
@@ -20,6 +21,7 @@ route.use(requestLogger);
 
 route.use("/", homePageRouter);
 route.use("/auth", authRoute);
+route.use("/users", userRoute);
 route.use("/submission", submisionRoute);
 route.use("/topic", topicRoute);
 route.use("/editorial-board-member", EditorialBoardMemberRoute);
