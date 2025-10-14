@@ -44,6 +44,39 @@ class NewsletterController {
       data: newNewsletter,
     });
   });
+
+  getNewsletters = asyncHandler(async (req: Request, res: Response) => {
+    const newsletters = await prisma.newsletter.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    if (!newsletters) {
+      throw new AppError('No newsletters found', 404);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: newsletters,
+    });
+  });
+
+  getNewsletterById = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = matchedData(req);
+    const newsletter = await prisma.newsletter.findUnique({
+      where: { id },
+    });
+
+    if (!newsletter) {
+      throw new AppError(`Newsletter with ID ${id} not found`, 404);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: newsletter,
+    });
+  });
 }
 
 export default new NewsletterController();
