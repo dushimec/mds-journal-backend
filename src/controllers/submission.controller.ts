@@ -4,6 +4,7 @@ import { prisma } from "../config/database";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
 import { UserRole, SubmissionStatus } from "@prisma/client";
+import axios from "axios";
 
 const getPagination = (req: Request) => {
   const page = Math.max(1, parseInt((matchedData(req) as any).page) || 1);
@@ -210,6 +211,11 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
       by: ["status"],
       _count: true,
     });
+    const totalDownloads = await prisma.fileUpload.aggregate({
+      _sum: {
+        downloadCount: true,
+      },
+    });
 
     res.json({
       success: true,
@@ -219,7 +225,41 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
           status,
           count: _count,
         })),
+        totalDownloads: totalDownloads._sum.downloadCount || 0,
       },
     });
+  });
+
+  static downloadFile = asyncHandler(async (req: Request, res: Response) => {
+    const { fileId } = req.params;
+
+    const file = await prisma.fileUpload.findUnique({
+      where: { id: fileId },
+    });
+
+    if (!file) {
+      throw new AppError("File not found", 404);
+    }
+
+    await prisma.fileUpload.update({
+      where: { id: fileId },
+      data: {
+        downloadCount: {
+          increment: 1,
+        },
+      },
+    });
+
+    const response = await axios({
+      method: "GET",
+      url: file.fileUrl,
+      responseType: "stream",
+    });
+
+    res.setHeader("Content-Disposition", `attachment; filename="${file.fileName}"`);
+    res.setHeader("Content-Type", file.mimeType);
+
+    response.data.pipe(res);
+
   });
 }

@@ -66,6 +66,7 @@ router
     validate,
     SubmissionController.delete
   )
+  .get("/download/:fileId", SubmissionController.downloadFile)
   .get("/stats", SubmissionController.stats);
 
 export default router;

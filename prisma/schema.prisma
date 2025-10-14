@@ -111,6 +111,7 @@ model FileUpload {
   mimeType      String
   fileSize      Int
   uploadDate    DateTime @default(now())
+  downloadCount Int      @default(0)
 
   submissionId  String
   submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
