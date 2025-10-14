@@ -7,6 +7,7 @@ export const journalIssueValidationRules = [
   body('year').notEmpty().withMessage('Year is required').isInt(),
   body('month').optional().isInt(),
   body('title').notEmpty().withMessage('Title is required').isString(),
+  body('description').optional().isString(),
   body('isSpecial').optional().isBoolean(),
   body('specialTitle').optional().isString(),
   body('guestEditors').optional().isString(),

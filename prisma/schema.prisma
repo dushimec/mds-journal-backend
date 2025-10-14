@@ -175,6 +175,7 @@ model JournalIssue {
   year          Int
   month         Int?
   title         String
+  description   String?
   isSpecial     Boolean  @default(false)
   specialTitle  String?
   guestEditors  String?
