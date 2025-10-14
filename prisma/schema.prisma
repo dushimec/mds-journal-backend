@@ -214,6 +214,8 @@ model ContactInfo {
   intro         String
   editorEmail   String
   submissionsEmail String
+  email         String?
+  phone         String?
   mailingAddress String
   officeHours   String
   locationDescription String
