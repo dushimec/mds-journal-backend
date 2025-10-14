@@ -14,6 +14,7 @@ import { globalErrorHandler } from "../utils/ErrorHandler"
 import aboutSectionRoute from "./aboutPageSection.Routes";
 import homePageRouter from "./homePage.route";
 import journalIssueRoute from "./journalIssue.route";
+import authorGuidelineRoute from "./authorGuideline.route";
 
 route.use(requestLogger);
 
@@ -29,6 +30,7 @@ route.use("/newsletter", newsletterRoute);
 route.use("/about-sections", aboutSectionRoute);
 route.use("/home-page", homePageRouter);
 route.use("/issues", journalIssueRoute);
+route.use("/author-guidelines", authorGuidelineRoute);
 
 route.use(globalErrorHandler)
 

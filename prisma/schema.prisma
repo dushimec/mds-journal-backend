@@ -49,6 +49,7 @@ model Submission {
   manuscriptTitle String?
   abstract        String?
   keywords        String?
+  manuscriptType  SubmissionManuscriptType?
   submittedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -75,6 +76,13 @@ enum SubmissionStatus {
   ACCEPTED
   REJECTED
   PUBLISHED
+}
+
+enum SubmissionManuscriptType {
+  ORIGINAL_RESEARCH
+  POLICY_BRIEF
+  FIELD_CASE_REPORT
+  BOOK_REVIEW
 }
 
 model Author {
@@ -284,4 +292,23 @@ model AuthorPage {
   title   String
   tagline String
   updatedAt DateTime @updatedAt
+}
+
+model AuthorGuideline {
+  id      String                  @id @default(cuid())
+  type    AuthorGuidelineType
+  content String
+  order   Int                     @default(0)
+}
+
+enum AuthorGuidelineType {
+  PLAGIARISM_POLICY
+  AUTHOR_FEES
+  SUBMISSION_TYPES
+  PUBLICATION_SCHEDULE
+  ACCEPTABLE_TOPICS
+  FORMATTING_GUIDELINES
+  MANUSCRIPT_FORMAT
+  REQUIREMENTS
+  ETHICAL_STANDARDS
 }

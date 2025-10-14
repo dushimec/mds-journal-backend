@@ -29,10 +29,10 @@ export const createSubmissionValidation = [
     .optional()
     .isString()
     .withMessage("Abstract must be a string"),
-  body("category")
+  body("topicId")
     .optional()
     .isString()
-    .withMessage("Category must be a string"),
+    .withMessage("Topic ID must be a string"),
   body("keywords")
     .optional()
     .isString()
@@ -104,7 +104,7 @@ export const updateSubmissionValidation = [
   param("id").isString().withMessage("Submission ID is required"),
   body("manuscriptTitle").optional().isString(),
   body("abstract").optional().isString(),
-  body("category").optional().isString(),
+  body("topicId").optional().isString(),
   body("keywords").optional().isString(),
   body("status")
     .optional()

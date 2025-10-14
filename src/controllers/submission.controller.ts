@@ -169,7 +169,7 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
 
 
   static update = asyncHandler(async (req: Request, res: Response) => {
-    const { ...data } = matchedData(req);
+    const { topicId, ...data } = matchedData(req);
     const { id } = req.params;
 
     const submission = await prisma.submission.findUnique({ where: { id: String(id) } });
@@ -185,7 +185,7 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
 
     const updated = await prisma.submission.update({
       where: { id: String(id) },
-      data,
+      data: { ...data, topic: { connect: { id: topicId } } },
       include: { authors: true, files: true, declarations: true },
     });
 
