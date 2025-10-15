@@ -31,8 +31,6 @@ router.post(
 
 router.get(
   '/subscribers',
-  authenticate,
-  authorizeRoles(UserRole.ADMIN),
   newsletterSubscriberController.getAllSubscribers
 );
 
