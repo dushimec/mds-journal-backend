@@ -16,6 +16,7 @@ import aboutSectionRoute from "./aboutPageSection.Routes";
 import homePageRouter from "./homePage.route";
 import journalIssueRoute from "./journalIssue.route";
 import authorGuidelineRoute from "./authorGuideline.route";
+import swaggerRoute from "./swagger.route";
 
 route.use(requestLogger);
 
@@ -33,6 +34,7 @@ route.use("/about-sections", aboutSectionRoute);
 route.use("/home-page", homePageRouter);
 route.use("/issues", journalIssueRoute);
 route.use("/author-guidelines", authorGuidelineRoute);
+route.use("/docs", swaggerRoute);
 
 route.use(globalErrorHandler)
 
