@@ -64,3 +64,22 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     throw new Error("Failed to send email");
   }
 };
+
+export const sendPasswordResetEmail = async (email: string, resetUrl: string) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Password Reset Request",
+      html: `<p>You requested a password reset. Click the link below to reset your password:</p>
+             <a href="${resetUrl}">${resetUrl}</a>
+             <p>This link is valid for 10 minutes.</p>`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info(`Password reset email sent to ${email}`);
+  } catch (err) {
+    logger.error(`Failed to send password reset email to ${email}`, err);
+    throw new Error("Failed to send password reset email");
+  }
+};

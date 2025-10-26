@@ -3,7 +3,7 @@ import { AppError } from "./appError";
 import { logger } from "./logger";
 
 export const globalErrorHandler = (
-  err: Error,
+  err: any,
   req: Request,
   res: Response,
   next: NextFunction
@@ -12,14 +12,13 @@ export const globalErrorHandler = (
     return res.status(err.status).json({
       success: false,
       message: err.message,
-      status: err.status,
     });
   }
 
-  logger.error(err.message);
+  logger.error(`Unhandled error: ${err.stack || err.message}`);
+
   return res.status(500).json({
     success: false,
-    message: "Internal server error",
-    status: 500,
+    message: "An internal server error occurred.",
   });
 };

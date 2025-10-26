@@ -24,19 +24,26 @@ app.get('/', (req, res) => {
     res.send('Welcome to the MDS API');
 });
 
+const api = process.env.API_URL || '/api';
+app.use(api, mainRoute);
+
+// Export app for testing
+export { app };
+
 const server: Server = createServer(app);
 const PORT = Number(process.env.PORT) || 5000;
 
-const api = process.env.API_URL || '/api';
-
-app.use(api, mainRoute);
-
-(async () => {
+const start = async () => {
     try {
         await connectDB();
         server.listen(PORT, () => logger.info(`Server running on port ${PORT}, and API_URL ${api}`));
     } catch (error) {
-        logger.error("Failed to connect to the database, server not started.");
+        logger.error("Failed to connect to the database, server not started.", error);
         process.exit(1);
     }
-})();
+};
+
+// Start the server if this file is run directly
+if (process.env.NODE_ENV !== 'test') {
+    start();
+}

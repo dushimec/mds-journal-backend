@@ -11,7 +11,9 @@ import {
   generateTwoFactorCode,
   sendTwoFactorCode,
   sendEmailVerificationCode,
+  sendPasswordResetEmail,
 } from "../utils/email";
+import crypto from "crypto";
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const { firstName, lastName, email, password } = matchedData(req);
@@ -268,5 +270,85 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: "Logged out successfully. Token should be cleared client-side.",
+  });
+});
+
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { email } = matchedData(req);
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user) {
+    throw new AppError("User not found", 404);
+  }
+
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const passwordResetToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  const passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+  await prisma.user.update({
+    where: { email },
+    data: {
+      passwordResetToken,
+      passwordResetExpires,
+    },
+  });
+
+  try {
+    const resetUrl = `${req.protocol}://${req.get(
+      "host"
+    )}/reset-password?token=${resetToken}`;
+    await sendPasswordResetEmail(user.email, resetUrl);
+    res.status(200).json({
+      success: true,
+      message: "Password reset link sent to your email.",
+    });
+  } catch (error) {
+    logger.error(`Failed to send password reset email: ${error}`);
+    await prisma.user.update({
+      where: { email },
+      data: {
+        passwordResetToken: null,
+        passwordResetExpires: null,
+      },
+    });
+    throw new AppError("Failed to send password reset email. Please try again later.", 500);
+  }
+});
+
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { token, password } = matchedData(req);
+
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { gt: new Date() },
+    },
+  });
+
+  if (!user) {
+    throw new AppError("Invalid or expired password reset token.", 400);
+  }
+
+  const hashedPassword = await hashPassword(password);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Password has been reset successfully.",
   });
 });

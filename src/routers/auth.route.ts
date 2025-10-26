@@ -12,6 +12,10 @@ import {
   verify2FAValidation,
   ResendCodeValidation,
 } from "../middlewares/validations/authValidation";
+import {
+  forgotPasswordValidator,
+  resetPasswordValidator,
+} from "../middlewares/validations/forgotPasswordValidator";
 
 route
   .post("/register", registerValidation, validate, authController.register)
@@ -34,6 +38,18 @@ route
     validate,
     authController.verifyEmailCode
   )
-  .post("/logout", authenticate, authController.logout);
+  .post("/logout", authenticate, authController.logout)
+  .post(
+    "/forgot-password",
+    forgotPasswordValidator,
+    validate,
+    authController.forgotPassword
+  )
+  .post(
+    "/reset-password",
+    resetPasswordValidator,
+    validate,
+    authController.resetPassword
+  );
 
 export default route;
