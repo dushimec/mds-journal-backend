@@ -121,4 +121,29 @@ export class EditorialBoardMemberController {
     await prisma.editorialBoardMember.delete({ where: { id: String(id) } });
     res.json({ success: true, message: "Editorial board member deleted" });
   });
+
+  static approve = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const member = await prisma.editorialBoardMember.findUnique({
+    where: { id: String(id) },
+  });
+
+  if (!member) throw new AppError("Editorial board member not found", 404);
+
+  if (member.isApproved)
+    throw new AppError("Member is already approved", 400);
+
+  const updatedMember = await prisma.editorialBoardMember.update({
+    where: { id: String(id) },
+    data: { isApproved: true },
+  });
+
+  res.json({
+    success: true,
+    message: "Member approved successfully",
+    data: updatedMember,
+  });
+});
+
 }

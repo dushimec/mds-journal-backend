@@ -13,13 +13,9 @@ import { UserRole } from "@prisma/client";
 const router = Router();
 
 router
-  .get(
-    "/",
-    EditorialBoardMemberController.getAll
-  )
+  .get("/", EditorialBoardMemberController.getAll)
   .post(
     "/",
-    authenticate, authorizeRoles(UserRole.ADMIN),
     createEditorialBoardMemberValidation,
     validate,
     ...EditorialBoardMemberController.create
@@ -32,17 +28,25 @@ router
   )
   .put(
     "/:id",
-    authenticate, authorizeRoles(UserRole.ADMIN),
+    authenticate,
+    authorizeRoles(UserRole.ADMIN),
     updateEditorialBoardMemberValidation,
     validate,
     ...EditorialBoardMemberController.update
   )
   .delete(
     "/:id",
-    authenticate, authorizeRoles(UserRole.ADMIN),
+    authenticate,
+    authorizeRoles(UserRole.ADMIN),
     deleteEditorialBoardMemberValidation,
     validate,
     EditorialBoardMemberController.delete
+  )
+  .patch(
+    "/:id/approve",
+    authenticate,
+    authorizeRoles(UserRole.ADMIN),
+    EditorialBoardMemberController.approve
   );
 
 export default router;

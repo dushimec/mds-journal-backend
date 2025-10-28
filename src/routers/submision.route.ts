@@ -40,7 +40,7 @@ router
   .post(
   "/upload-multiple",
   authenticate,authorizeRoles(UserRole.AUTHOR),
-  upload.array("files", 5), // max 5 files
+  upload.array("files", 5), 
   SubmissionController.uploadFiles
    )
 

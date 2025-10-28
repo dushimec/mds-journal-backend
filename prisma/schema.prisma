@@ -201,6 +201,7 @@ model EditorialBoardMember {
   profileImage String?
   order        Int      @default(0)
   isActive     Boolean  @default(true)
+  isApproved     Boolean  @default(false)
   createdAt    DateTime @default(now())
 }
 
