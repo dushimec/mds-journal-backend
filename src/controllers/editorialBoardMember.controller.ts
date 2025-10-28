@@ -5,63 +5,60 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
 import multer from "multer";
 import { cloudinary } from "../config/cloudinary";
-import { UserRole } from "@prisma/client"; // Make sure this import matches your project
+import { UserRole } from "@prisma/client"; 
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 export class EditorialBoardMemberController {
   static create = [
-    upload.single("profileImage"),
-    asyncHandler(async (req: Request, res: Response) => {
-    
+  upload.single("profileImage"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const {
+      fullName,
+      qualifications,
+      affiliation,
+      bio,
+      email,
+      order,
+      isActive,
+    } = req.body;
 
-      const {
+    let profileImage: string | undefined = undefined;
+    if (req.file?.buffer) {
+      const uploadResult = await new Promise<any>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: "editorial-board", resource_type: "image" },
+          (error, result) => {
+            if (error || !result)
+              return reject(new AppError("Cloudinary upload failed", 500));
+            resolve(result);
+          }
+        );
+        if (req.file && req.file.buffer) {
+          stream.end(req.file.buffer);
+        }
+      });
+      profileImage = uploadResult.secure_url;
+    }
+
+    const member = await prisma.editorialBoardMember.create({
+      data: {
         fullName,
-        role,
         qualifications,
         affiliation,
         bio,
         email,
-        order,
-        isActive,
-      } = req.body;
+        order: parseInt(order, 10) || 0,
+        isActive: isActive === 'true',
+        profileImage,
+        role: UserRole.EDITOR,
+      },
+    });
 
-      let profileImage: string | undefined = undefined;
-      if (req.file?.buffer) {
-        const uploadResult = await new Promise<any>((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(
-            { folder: "editorial-board", resource_type: "image" },
-            (error, result) => {
-              if (error || !result) return reject(new AppError("Cloudinary upload failed", 500));
-              resolve(result);
-            }
-          );
-          if (req.file && req.file.buffer) {
-            stream.end(req.file.buffer);
-          }
-        });
-        profileImage = uploadResult.secure_url;
-      }
-      
-     
+    res.status(201).json({ success: true, data: member });
+  }),
+];
 
-      const member = await prisma.editorialBoardMember.create({
-        data: {
-          fullName,
-          role,
-          qualifications,
-          affiliation,
-          bio,
-          email,
-          order: parseInt(order, 10) || 0,
-          isActive: isActive === 'true',
-          profileImage,
-        },
-      });
-
-      res.status(201).json({ success: true, data: member });
-    }),
-  ];
 
   static update = [
     upload.single("profileImage"),
