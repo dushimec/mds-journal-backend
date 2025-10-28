@@ -10,7 +10,6 @@ router
   .get(
     "/",
     authenticate,
-    authorizeRoles(UserRole.ADMIN),
     LogoController.getSettings
   )
   .post(
