@@ -8,32 +8,39 @@ import {
   getByIdEditorialBoardMemberValidation,
   validate,
 } from "../middlewares/validations/editorialBoardMemberValidation";
+import { upload } from "../middlewares/upload"; // ✅ import your Cloudinary upload middleware
 import { UserRole } from "@prisma/client";
 
 const router = Router();
 
 router
   .get("/", EditorialBoardMemberController.getAll)
+
   .post(
     "/",
+    upload.single("profileImage"),
     createEditorialBoardMemberValidation,
     validate,
-    ...EditorialBoardMemberController.create
+    EditorialBoardMemberController.create
   )
+
   .get(
     "/:id",
     getByIdEditorialBoardMemberValidation,
     validate,
     EditorialBoardMemberController.getById
   )
+
   .put(
     "/:id",
     authenticate,
     authorizeRoles(UserRole.ADMIN),
+    upload.single("profileImage"),
     updateEditorialBoardMemberValidation,
     validate,
-    ...EditorialBoardMemberController.update
+    EditorialBoardMemberController.update
   )
+
   .delete(
     "/:id",
     authenticate,
@@ -42,6 +49,7 @@ router
     validate,
     EditorialBoardMemberController.delete
   )
+
   .patch(
     "/:id/approve",
     authenticate,

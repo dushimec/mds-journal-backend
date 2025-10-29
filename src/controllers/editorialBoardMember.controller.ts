@@ -3,16 +3,10 @@ import { matchedData } from "express-validator";
 import { prisma } from "../config/database";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
-import multer from "multer";
-import { cloudinary } from "../config/cloudinary";
-import { UserRole } from "@prisma/client"; 
-
-const upload = multer({ storage: multer.memoryStorage() });
+import { UserRole } from "@prisma/client";
 
 export class EditorialBoardMemberController {
-  static create = [
-  upload.single("profileImage"),
-  asyncHandler(async (req: Request, res: Response) => {
+  static create = asyncHandler(async (req: Request, res: Response) => {
     const {
       fullName,
       qualifications,
@@ -23,23 +17,7 @@ export class EditorialBoardMemberController {
       isActive,
     } = req.body;
 
-    let profileImage: string | undefined = undefined;
-    if (req.file?.buffer) {
-      const uploadResult = await new Promise<any>((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: "editorial-board", resource_type: "image" },
-          (error, result) => {
-            if (error || !result)
-              return reject(new AppError("Cloudinary upload failed", 500));
-            resolve(result);
-          }
-        );
-        if (req.file && req.file.buffer) {
-          stream.end(req.file.buffer);
-        }
-      });
-      profileImage = uploadResult.secure_url;
-    }
+    const profileImage = (req.file as any)?.path; // ✅ Cloudinary URL
 
     const member = await prisma.editorialBoardMember.create({
       data: {
@@ -49,50 +27,33 @@ export class EditorialBoardMemberController {
         bio,
         email,
         order: parseInt(order, 10) || 0,
-        isActive: isActive === 'true',
+        isActive: isActive === "true",
         profileImage,
         role: UserRole.EDITOR,
       },
     });
 
     res.status(201).json({ success: true, data: member });
-  }),
-];
+  });
 
+  static update = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const data = matchedData(req);
 
-  static update = [
-    upload.single("profileImage"),
-    asyncHandler(async (req: Request, res: Response) => {
-      const { id } = req.params;
-      const data = matchedData(req);
+    const member = await prisma.editorialBoardMember.findUnique({
+      where: { id: String(id) },
+    });
+    if (!member) throw new AppError("Editorial board member not found", 404);
 
-      const member = await prisma.editorialBoardMember.findUnique({ where: { id: String(id) } });
-      if (!member) throw new AppError("Editorial board member not found", 404);
+    if (req.file) data.profileImage = (req.file as any).path;
 
-      if (req.file?.buffer) {
-        const uploadResult = await new Promise<any>((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(
-            { folder: "editorial-board", resource_type: "image" },
-            (error, result) => {
-              if (error || !result) return reject(new AppError("Cloudinary upload failed", 500));
-              resolve(result);
-            }
-          );
-          if (req.file && req.file.buffer) {
-            stream.end(req.file.buffer);
-          }
-        });
-        data.profileImage = uploadResult.secure_url;
-      }
+    const updated = await prisma.editorialBoardMember.update({
+      where: { id: String(id) },
+      data,
+    });
 
-      const updated = await prisma.editorialBoardMember.update({
-        where: { id: String(id) },
-        data,
-      });
-
-      res.json({ success: true, data: updated });
-    }),
-  ];
+    res.json({ success: true, data: updated });
+  });
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
     const members = await prisma.editorialBoardMember.findMany({
@@ -112,7 +73,9 @@ export class EditorialBoardMemberController {
 
   static delete = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const member = await prisma.editorialBoardMember.findUnique({ where: { id: String(id) } });
+    const member = await prisma.editorialBoardMember.findUnique({
+      where: { id: String(id) },
+    });
     if (!member) throw new AppError("Editorial board member not found", 404);
 
     await prisma.editorialBoardMember.delete({ where: { id: String(id) } });
@@ -120,27 +83,24 @@ export class EditorialBoardMemberController {
   });
 
   static approve = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
+    const { id } = req.params;
 
-  const member = await prisma.editorialBoardMember.findUnique({
-    where: { id: String(id) },
+    const member = await prisma.editorialBoardMember.findUnique({
+      where: { id: String(id) },
+    });
+    if (!member) throw new AppError("Editorial board member not found", 404);
+    if (member.isApproved)
+      throw new AppError("Member is already approved", 400);
+
+    const updatedMember = await prisma.editorialBoardMember.update({
+      where: { id: String(id) },
+      data: { isApproved: true },
+    });
+
+    res.json({
+      success: true,
+      message: "Member approved successfully",
+      data: updatedMember,
+    });
   });
-
-  if (!member) throw new AppError("Editorial board member not found", 404);
-
-  if (member.isApproved)
-    throw new AppError("Member is already approved", 400);
-
-  const updatedMember = await prisma.editorialBoardMember.update({
-    where: { id: String(id) },
-    data: { isApproved: true },
-  });
-
-  res.json({
-    success: true,
-    message: "Member approved successfully",
-    data: updatedMember,
-  });
-});
-
 }
