@@ -54,6 +54,9 @@ model Submission {
   keywords        String?
   manuscriptType  SubmissionManuscriptType?
   submittedAt     DateTime?
+  reviewStartedAt DateTime?      // 🆕 Added
+  publishedAt     DateTime?      // 🆕 Added
+  rejectedAt      DateTime?      // 🆕 Added
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

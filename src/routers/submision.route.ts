@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { SubmissionController } from "../controllers/submission.controller";
 import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
-import { upload } from "../middlewares/upload"; 
+import { upload } from "../middlewares/upload";
 import {
   createSubmissionValidation,
   deleteSubmissionValidation,
@@ -10,63 +10,96 @@ import {
   updateSubmissionValidation,
   validate,
 } from "../middlewares/validations/submissionValidation";
-import { UserRole } from "@prisma/client";
+import { UserRole, SubmissionStatus } from "@prisma/client";
+import { body, param } from "express-validator";
 
 const router = Router();
 
-router
-  .get(
-    "/",
-    getAllSubmissionsValidation,
-    validate,
-    SubmissionController.getAll
-  )
-  .post(
-    "/",
-    authenticate,authorizeRoles(UserRole.AUTHOR),
-    createSubmissionValidation,
-    validate,
-    SubmissionController.create
-  )
-  // Single file
-  .post(
+router.get(
+  "/",
+  getAllSubmissionsValidation,
+  validate,
+  SubmissionController.getAll
+);
+
+router.post(
+  "/",
+  authenticate,
+  authorizeRoles(UserRole.AUTHOR),
+  createSubmissionValidation,
+  validate,
+  SubmissionController.create
+);
+
+router.post(
   "/upload",
-  authenticate,authorizeRoles(UserRole.AUTHOR),
+  authenticate,
+  authorizeRoles(UserRole.AUTHOR),
   upload.single("file"),
   SubmissionController.uploadFile
-  )
+);
 
-// Multiple files
-  .post(
+router.post(
   "/upload-multiple",
-  authenticate,authorizeRoles(UserRole.AUTHOR),
-  upload.array("files", 5), 
+  authenticate,
+  authorizeRoles(UserRole.AUTHOR),
+  upload.array("files", 5),
   SubmissionController.uploadFiles
-   )
+);
 
-  .get(
-    "/:id",
-    authenticate,
-    getByIdSubmissionValidation,
-      authorizeRoles(UserRole.ADMIN),
-    validate,
-    SubmissionController.getById
-  )
-  .put(
-    "/:id",
-    authenticate,
-    updateSubmissionValidation,
-    validate,
-    SubmissionController.update
-  )
-  .delete(
-    "/:id",
-    authenticate,authorizeRoles(UserRole.ADMIN),
-    deleteSubmissionValidation,
-    validate,
-    SubmissionController.delete
-  )
-  .get("/download/:fileId", SubmissionController.downloadFile)
-  .get("/stats", SubmissionController.stats);
+router.get(
+  "/:id",
+  authenticate,
+  authorizeRoles(UserRole.ADMIN),
+  getByIdSubmissionValidation,
+  validate,
+  SubmissionController.getById
+);
+
+router.put(
+  "/:id",
+  authenticate,
+  authorizeRoles(UserRole.AUTHOR, UserRole.EDITOR, UserRole.ADMIN),
+  updateSubmissionValidation,
+  validate,
+  SubmissionController.update
+);
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorizeRoles(UserRole.ADMIN),
+  deleteSubmissionValidation,
+  validate,
+  SubmissionController.delete
+);
+
+router.get(
+  "/stats",
+  authenticate,
+  authorizeRoles(UserRole.ADMIN, UserRole.EDITOR),
+  SubmissionController.stats
+);
+
+router.get(
+  "/download/:fileId",
+  authenticate,
+  authorizeRoles(UserRole.ADMIN, UserRole.EDITOR, UserRole.AUTHOR),
+  SubmissionController.downloadFile
+);
+
+router.patch(
+  "/:id/status",
+  authenticate,
+  authorizeRoles(UserRole.ADMIN, UserRole.EDITOR, UserRole.REVIEWER, UserRole.AUTHOR),
+  [
+    param("id").isString().notEmpty().withMessage("Submission ID is required"),
+    body("status")
+      .isIn(Object.values(SubmissionStatus))
+      .withMessage("Invalid submission status"),
+  ],
+  validate,
+  SubmissionController.updateStatus
+);
 
 export default router;

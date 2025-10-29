@@ -24,7 +24,6 @@ export const createEditorialBoardMemberValidation = [
   body("email").isEmail().withMessage("Valid email is required"),
   body("order").optional().isInt({ min: 0 }).withMessage("Order must be a positive integer"),
   body("isActive").optional().isBoolean(),
-  // profileImage is handled by multer/cloudinary, not validated here
   validate,
 ];
 
@@ -38,7 +37,6 @@ export const updateEditorialBoardMemberValidation = [
   body("email").optional().isEmail(),
   body("order").optional().isInt({ min: 0 }),
   body("isActive").optional().isBoolean(),
-  // profileImage is handled by multer/cloudinary, not validated here
   validate,
 ];
 

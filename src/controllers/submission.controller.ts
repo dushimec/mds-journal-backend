@@ -193,6 +193,100 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
     res.json({ success: true, data: updated });
   });
 
+static updateStatus = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { status } = matchedData(req) as { status: SubmissionStatus };
+
+  const submission = await prisma.submission.findUnique({
+    where: { id },
+    include: { user: true },
+  });
+
+  if (!submission) throw new AppError("Submission not found", 404);
+
+  const role = req.user?.role;
+  const userId = req.user?.userId;
+
+ 
+  switch (role) {
+    case UserRole.AUTHOR:
+      if (submission.userId !== userId)
+        throw new AppError("Access denied: not your submission", 403);
+
+      const allowedForAuthor: SubmissionStatus[] = [
+        SubmissionStatus.DRAFT,
+        SubmissionStatus.SUBMITTED,
+      ];
+
+      if (!allowedForAuthor.includes(status)) {
+        throw new AppError(
+          "Authors can only change status to DRAFT or SUBMITTED",
+          400
+        );
+      }
+      break;
+
+    case UserRole.EDITOR:
+    case UserRole.REVIEWER:
+    case UserRole.ADMIN:
+      break;
+
+    default:
+      throw new AppError("Not authorized to change submission status", 403);
+  }
+
+  const now = new Date();
+  const data: Record<string, any> = { status, updatedAt: now };
+
+  switch (status) {
+    case SubmissionStatus.SUBMITTED:
+      data.submittedAt = now;
+      break;
+
+    case SubmissionStatus.UNDER_REVIEW:
+      data.reviewStartedAt = now;
+      break;
+
+    case SubmissionStatus.PUBLISHED:
+      data.publishedAt = now;
+      break;
+
+    case SubmissionStatus.REJECTED:
+      data.rejectedAt = now;
+      break;
+  }
+
+  const updated = await prisma.submission.update({
+    where: { id },
+    data,
+    include: {
+      authors: true,
+      files: true,
+      declarations: true,
+      topic: true,
+      user: { select: { firstName: true, lastName: true, email: true } },
+    },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      action: "UPDATE_SUBMISSION_STATUS",
+      details: {
+        submissionId: id,
+        oldStatus: submission.status,
+        newStatus: status,
+      },
+      userId: userId!,
+      timestamp: now,
+    },
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: `Submission status updated to ${status}`,
+    data: updated,
+  });
+});
 
   static delete = asyncHandler(async (req: Request, res: Response) => {
     const { id } = matchedData(req);
