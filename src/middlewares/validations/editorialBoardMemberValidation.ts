@@ -18,7 +18,6 @@ export const validate = (req: Request, res: Response, next: NextFunction) => {
 
 export const createEditorialBoardMemberValidation = [
   body("fullName").isString().withMessage("Full name is required"),
-  body("role").isString().withMessage("Role is required"),
   body("qualifications").optional().isString(),
   body("affiliation").optional().isString(),
   body("bio").optional().isString(),

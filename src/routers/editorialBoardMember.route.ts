@@ -8,7 +8,7 @@ import {
   getByIdEditorialBoardMemberValidation,
   validate,
 } from "../middlewares/validations/editorialBoardMemberValidation";
-import { upload } from "../middlewares/upload"; // ✅ import your Cloudinary upload middleware
+import { upload } from "../middlewares/upload"; 
 import { UserRole } from "@prisma/client";
 
 const router = Router();
