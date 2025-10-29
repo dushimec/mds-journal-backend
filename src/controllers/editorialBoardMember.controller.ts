@@ -36,24 +36,58 @@ export class EditorialBoardMemberController {
     res.status(201).json({ success: true, data: member });
   });
 
-  static update = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const data = matchedData(req);
+static update = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
 
-    const member = await prisma.editorialBoardMember.findUnique({
-      where: { id: String(id) },
-    });
-    if (!member) throw new AppError("Editorial board member not found", 404);
+  // Only allow these fields to be updated
+  const allowedFields = [
+    "fullName",
+    "qualifications",
+    "affiliation",
+    "bio",
+    "email",
+    "order",
+    "isActive",
+    "profileImage",
+    "role",
+  ];
 
-    if (req.file) data.profileImage = (req.file as any).path;
+  const payload: any = {};
 
-    const updated = await prisma.editorialBoardMember.update({
-      where: { id: String(id) },
-      data,
-    });
+  // Extract only allowed fields from request body
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      payload[field] = req.body[field];
+    }
+  }
 
-    res.json({ success: true, data: updated });
+  // Convert types properly
+  if (payload.isActive !== undefined) {
+    payload.isActive = payload.isActive === "true" || payload.isActive === true;
+  }
+  if (payload.order !== undefined) {
+    payload.order = parseInt(payload.order, 10) || 0;
+  }
+
+  // Handle uploaded file
+  if (req.file) {
+    payload.profileImage = (req.file as any).path;
+  }
+
+  // Check if member exists
+  const member = await prisma.editorialBoardMember.findUnique({
+    where: { id },
   });
+  if (!member) throw new AppError("Editorial board member not found", 404);
+
+  // Update
+  const updated = await prisma.editorialBoardMember.update({
+    where: { id },
+    data: payload,
+  });
+
+  res.json({ success: true, data: updated });
+});
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
     const members = await prisma.editorialBoardMember.findMany({
