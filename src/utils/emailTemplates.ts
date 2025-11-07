@@ -73,3 +73,45 @@ export const genericEmailTemplate = (subject: string, content: string) => `
   </div>
 </div>
 `;
+
+// Submission Status Update Email Template
+export const submissionStatusEmailTemplate = (
+  status: string,
+  manuscriptTitle: string,
+  link?: string
+) => `
+<div style="font-family: Arial, sans-serif; background-color: #f0f7ff; padding: 40px;">
+  <div style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    <div style="background-color: #1d4ed8; padding: 24px; text-align: center;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 24px;">African Journal</h1>
+      <p style="color: #dbeafe; margin: 4px 0 0 0; font-size: 14px;">Submission Status Update</p>
+    </div>
+    <div style="padding: 24px; color: #1f2937;">
+      <p style="font-size: 16px;">Hello,</p>
+      <p style="font-size: 16px;">The status of your submission <strong>"${manuscriptTitle}"</strong> has been updated to <strong style="color: #1d4ed8;">${status}</strong>.</p>
+      <p style="font-size: 14px; color: #6b7280;">You can view the submission details${link ? ` <a href="${link}" style="color: #1d4ed8;">here</a>` : " in your account"}.</p>
+
+      ${status === 'PUBLISHED' ? `
+        <div style="margin-top: 16px; padding: 16px; background-color: #ecfdf5; border-radius: 8px; color: #065f46;">
+          <strong>Good news!</strong> Your manuscript has been published. Congratulations!
+        </div>
+      ` : ''}
+
+      ${status === 'REJECTED' ? `
+        <div style="margin-top: 16px; padding: 16px; background-color: #fff1f2; border-radius: 8px; color: #9f1239;">
+          We're sorry to inform you that your submission was not accepted. Thank you for submitting to African Journal.
+        </div>
+      ` : ''}
+
+      ${status === 'UNDER_REVIEW' ? `
+        <div style="margin-top: 16px; padding: 16px; background-color: #f0f7ff; border-radius: 8px; color: #1d4ed8;">
+          Your submission is now under review. We'll notify you with updates as they become available.
+        </div>
+      ` : ''}
+
+      <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">If you have questions, reply to this email or contact the editorial office.</p>
+    </div>
+    <div style="background-color: #f0f7ff; padding: 16px; text-align: center; font-size: 12px; color: #6b7280;">&copy; ${new Date().getFullYear()} African Journal. All rights reserved.</div>
+  </div>
+</div>
+`;

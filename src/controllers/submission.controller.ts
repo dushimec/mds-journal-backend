@@ -5,6 +5,8 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
 import { UserRole, SubmissionStatus } from "@prisma/client";
 import axios from "axios";
+import { sendSubmissionStatusEmail } from "../utils/email";
+import archiver from "archiver";
 
 const getPagination = (req: Request) => {
   const page = Math.max(1, parseInt((matchedData(req) as any).page) || 1);
@@ -65,61 +67,63 @@ static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
 });
 
 
-  static create = asyncHandler(async (req: Request, res: Response) => {
-    if (req.user?.role !== UserRole.AUTHOR) {
-      throw new AppError("Only authors can submit, please login!", 403);
-    }
+static create = asyncHandler(async (req: Request, res: Response) => {
+ 
 
-    const data = matchedData(req);
+  const data = matchedData(req);
+  if (Array.isArray(data.keywords) && data.keywords.length > 5) {
+    throw new AppError("You can only add up to 5 keywords.", 400);
+  }
 
-    const submission = await prisma.submission.create({
-      data: {
-        manuscriptTitle: data.manuscriptTitle,
-        abstract: data.abstract,
-        topicId: data.topicId,
-        keywords: data.keywords,
-        status: SubmissionStatus.DRAFT,
-        userId: req.user?.userId ?? null,
-        submittedAt: new Date(),
+  const submission = await prisma.submission.create({
+    data: {
+      manuscriptTitle: data.manuscriptTitle,
+      abstract: data.abstract,
+      topicId: data.topicId,
+      keywords: data.keywords,
+      status: SubmissionStatus.DRAFT,
+      userId: req.user?.userId ?? null,
+      submittedAt: new Date(),
 
-        authors: {
-          create: data.authors.map((a: any) => ({
-            fullName: a.fullName,
-            email: a.email,
-            affiliation: a.affiliation,
-            isCorresponding: a.isCorresponding,
-            order: a.order,
-            userId: req.user?.userId ?? null,
-          })),
-        },
-
-        files: {
-          create: data.files.map((f: any) => ({
-            fileName: f.fileName,
-            fileType: f.fileType,
-            fileUrl: f.fileUrl,
-            mimeType: f.mimeType,
-            fileSize: f.fileSize,
-          })),
-        },
-
-        declarations: {
-          create: data.declarations.map((d: any) => ({
-            type: d.type,
-            isChecked: d.isChecked,
-            text: d.text,
-          })),
-        },
+      authors: {
+        create: data.authors.map((a: any) => ({
+          fullName: a.fullName,
+          email: a.email,
+          affiliation: a.affiliation,
+          isCorresponding: a.isCorresponding,
+          order: a.order,
+          userId: req.user?.userId ?? null,
+        })),
       },
-      include: {
-        authors: true,
-        files: true,
-        declarations: true,
-      },
-    });
 
-    res.status(201).json({ success: true, data: submission });
+      files: {
+        create: data.files.map((f: any) => ({
+          fileName: f.fileName,
+          fileType: f.fileType,
+          fileUrl: f.fileUrl,
+          mimeType: f.mimeType,
+          fileSize: f.fileSize,
+        })),
+      },
+
+      declarations: {
+        create: data.declarations.map((d: any) => ({
+          type: d.type,
+          isChecked: d.isChecked,
+          text: d.text,
+        })),
+      },
+    },
+    include: {
+      authors: true,
+      files: true,
+      declarations: true,
+    },
   });
+
+  res.status(201).json({ success: true, data: submission });
+});
+
 
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
@@ -281,6 +285,18 @@ static updateStatus = asyncHandler(async (req: Request, res: Response) => {
     },
   });
 
+  try {
+    const email = updated.user?.email;
+    if (email) {
+      const frontend = process.env.FRONTEND_URL || process.env.APP_URL || "";
+      const submissionLink = `${frontend}/submissions/${updated.id}`;
+      const manuscriptTitle = updated.manuscriptTitle ?? "Untitled submission";
+      await sendSubmissionStatusEmail(email, status, manuscriptTitle, updated.id, submissionLink);
+    }
+  } catch (err) {
+    console.error("Failed to send submission status email:", err);
+  }
+
   return res.status(200).json({
     success: true,
     message: `Submission status updated to ${status}`,
@@ -324,36 +340,92 @@ static updateStatus = asyncHandler(async (req: Request, res: Response) => {
     });
   });
 
-  static downloadFile = asyncHandler(async (req: Request, res: Response) => {
-    const { fileId } = req.params;
+static downloadFile = asyncHandler(async (req: Request, res: Response) => {
+    const { fileId, filesId, submissionId } = req.params;
 
-    const file = await prisma.fileUpload.findUnique({
-      where: { id: fileId },
+    if (!submissionId) throw new AppError("Submission ID is required", 400);
+
+    // Ensure the submission exists
+    const submission = await prisma.submission.findUnique({
+      where: { id: submissionId },
+      include: { files: true },
     });
 
-    if (!file) {
-      throw new AppError("File not found", 404);
+    if (!submission) throw new AppError("Submission not found", 404);
+
+    // SINGLE FILE DOWNLOAD
+    if (fileId) {
+      const file = submission.files.find((f) => f.id === fileId);
+      if (!file) throw new AppError("File not found in this submission", 404);
+
+      await prisma.fileUpload.update({
+        where: { id: fileId },
+        data: { downloadCount: { increment: 1 } },
+      });
+
+      try {
+        const response = await axios.get(file.fileUrl, {
+          responseType: "stream",
+          validateStatus: (s) => s >= 200 && s < 300,
+          timeout: 15000,
+        });
+
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${file.fileName}"`
+        );
+        res.setHeader(
+          "Content-Type",
+          response.headers["content-type"] || "application/octet-stream"
+        );
+
+        response.data.pipe(res);
+      } catch (err: any) {
+        console.error("Download error:", err?.message);
+        throw new AppError(
+          `Failed to fetch remote file: ${err.message}`,
+          err.response?.status || 502
+        );
+      }
+      return;
     }
 
-    await prisma.fileUpload.update({
-      where: { id: fileId },
-      data: {
-        downloadCount: {
-          increment: 1,
-        },
-      },
-    });
+    // MULTIPLE FILE DOWNLOAD
+    if (filesId) {
+      const ids = filesId.split(",").map((id) => id.trim());
+      const files = submission.files.filter((f) => ids.includes(f.id));
 
-    const response = await axios({
-      method: "GET",
-      url: file.fileUrl,
-      responseType: "stream",
-    });
+      if (!files.length)
+        throw new AppError("No valid files found for this submission", 404);
 
-    res.setHeader("Content-Disposition", `attachment; filename="${file.fileName}"`);
-    res.setHeader("Content-Type", file.mimeType);
+      // Create a ZIP archive
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="submission-${submissionId}-files.zip"`
+      );
+      res.setHeader("Content-Type", "application/zip");
 
-    response.data.pipe(res);
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.pipe(res);
 
+      for (const file of files) {
+        try {
+          const response = await axios.get(file.fileUrl, { responseType: "stream" });
+          archive.append(response.data, { name: file.fileName });
+
+          await prisma.fileUpload.update({
+            where: { id: file.id },
+            data: { downloadCount: { increment: 1 } },
+          });
+        } catch (err: any) {
+          console.warn(`Failed to fetch file ${file.fileName}:`, err?.message);
+        }
+      }
+
+      await archive.finalize();
+      return;
+    }
+
+    throw new AppError("Either fileId or filesId is required", 400);
   });
 }

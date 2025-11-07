@@ -5,7 +5,9 @@ import {
   twoFactorEmailTemplate,
   emailVerificationTemplate,
   genericEmailTemplate,
+  submissionStatusEmailTemplate,
 } from "./emailTemplates";
+import { SubmissionStatus } from "@prisma/client";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -80,5 +82,32 @@ export const sendPasswordResetEmail = async (email: string, resetUrl: string) =>
   } catch (err) {
     logger.error(`Failed to send password reset email to ${email}`, err);
     throw new Error("Failed to send password reset email");
+  }
+};
+
+// Send submission status update email
+export const sendSubmissionStatusEmail = async (
+  email: string,
+  status: SubmissionStatus | string,
+  manuscriptTitle: string,
+  submissionId: string,
+  link?: string
+) => {
+  try {
+    const frontend = process.env.FRONTEND_URL || process.env.APP_URL || "";
+    const submissionLink = link || `${frontend}/submissions/${submissionId}`;
+    const subject = `Submission status updated: ${status}`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject,
+      html: submissionStatusEmailTemplate(String(status), manuscriptTitle, submissionLink),
+    });
+
+    logger.info(`Submission status email (${status}) sent to ${email}`);
+  } catch (err) {
+    logger.error(`Failed to send submission status email to ${email}`, err);
+    throw new Error("Failed to send submission status email");
   }
 };

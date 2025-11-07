@@ -82,9 +82,16 @@ router.get(
 );
 
 router.get(
-  "/download/:fileId",
+  "/:submissionId/files/:fileId/download",
   authenticate,
-  authorizeRoles(UserRole.ADMIN, UserRole.EDITOR, UserRole.AUTHOR),
+  authorizeRoles(UserRole.AUTHOR, UserRole.EDITOR, UserRole.REVIEWER, UserRole.ADMIN),
+  SubmissionController.downloadFile
+);
+
+router.get(
+  "/:submissionId/files/download/:filesId",
+  authenticate,
+  authorizeRoles(UserRole.AUTHOR, UserRole.EDITOR, UserRole.REVIEWER, UserRole.ADMIN),
   SubmissionController.downloadFile
 );
 
