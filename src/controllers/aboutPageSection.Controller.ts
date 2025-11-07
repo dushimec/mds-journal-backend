@@ -2,6 +2,7 @@ import { validationResult } from "express-validator";
 import { Request, Response } from "express";
 import { matchedData } from "express-validator";
 import { prisma } from "../config/database";
+import { AboutSection } from "@prisma/client";
 
 // =========================
 // Create Section
@@ -16,17 +17,23 @@ export const createSection = async (req: Request, res: Response): Promise<void> 
   try {
     const { section, title, content, order } = req.body;
 
-    // 🛑 Check if the section already exists
-    const existingSection = await prisma.aboutPageSection.findUnique({
-      where: { section },
-    });
-
-    if (existingSection) {
-      res.status(400).json({ message: `Section "${section}" already exists.` });
+    const validSections = Object.values(AboutSection);
+    if (!validSections.includes(section)) {
+      res.status(400).json({ message: "Invalid section type" });
       return;
     }
 
-    // ✅ Create new section
+    // Only check uniqueness for fixed sections
+    if (section !== "CUSTOMIZ_SECTION") {
+      const existingSection = await prisma.aboutPageSection.findFirst({
+        where: { section },
+      });
+      if (existingSection) {
+        res.status(400).json({ message: `Section "${section}" already exists.` });
+        return;
+      }
+    }
+
     const newSection = await prisma.aboutPageSection.create({
       data: { section, title, content, order },
     });
@@ -36,7 +43,6 @@ export const createSection = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ message: err.message });
   }
 };
-
 
 // =========================
 // Get All Sections

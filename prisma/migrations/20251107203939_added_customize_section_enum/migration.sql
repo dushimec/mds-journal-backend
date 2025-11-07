@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AboutSection" ADD VALUE 'CUSTOMIZ_SECTION';

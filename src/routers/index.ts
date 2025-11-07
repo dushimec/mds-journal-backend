@@ -18,6 +18,7 @@ import journalIssueRoute from "./journalIssue.route";
 import authorGuidelineRoute from "./authorGuideline.route";
 import swaggerRoute from "./swagger.route";
 import logoRoute from "./logo.route"
+import announcementRoute from "./announcement.routes"
 
 route.use(requestLogger);
 
@@ -37,6 +38,7 @@ route.use("/issues", journalIssueRoute);
 route.use("/author-guidelines", authorGuidelineRoute);
 route.use("/docs", swaggerRoute);
 route.use("/logo", logoRoute);
+route.use("/announcements", announcementRoute);
 
 route.use(globalErrorHandler);
 
