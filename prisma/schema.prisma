@@ -110,17 +110,18 @@ model Author {
 }
 
 model FileUpload {
-  id            String   @id @default(cuid())
-  fileName      String
-  fileType      FileType
-  fileUrl       String
-  mimeType      String
-  fileSize      Int
-  uploadDate    DateTime @default(now())
-  downloadCount Int      @default(0)
+  id           String   @id @default(cuid())
+  fileName     String
+  fileType     FileType
+  fileUrl      String
+  secureUrl    String?
+  mimeType     String
+  fileSize     Int
+  uploadDate   DateTime @default(now())
+  downloadCount Int     @default(0)
 
-  submissionId  String
-  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId String?
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 }
 
 enum FileType {

@@ -6,7 +6,16 @@ import { AppError } from "../utils/appError";
 import { UserRole, SubmissionStatus } from "@prisma/client";
 import axios from "axios";
 import { sendSubmissionStatusEmail } from "../utils/email";
-import archiver from "archiver";
+import JSZip from "jszip";
+import { v2 as cloudinary } from "cloudinary";
+import "dotenv/config";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
+});
 
 const getPagination = (req: Request) => {
   const page = Math.max(1, parseInt((matchedData(req) as any).page) || 1);
@@ -15,56 +24,6 @@ const getPagination = (req: Request) => {
 };
 
 export class SubmissionController {
-  // File upload (single)
- static uploadFile = asyncHandler(async (req: Request, res: Response) => {
-    if (!req.file) {
-      throw new AppError("No file uploaded", 400);
-    }
-    console.log("Uploaded file info:", req.file);
-    const fileUrl = (req.file as any).path || (req.file as any).filename || "";
-
-    if (!fileUrl) {
-      throw new AppError("Failed to get uploaded file URL from Cloudinary", 500);
-    }
-
-    res.status(201).json({
-      success: true,
-      file: {
-        fileName: req.file.originalname,
-        fileUrl,                           
-        fileType: req.file.mimetype,
-        fileSize: req.file.size, 
-      },
-    });
-  });
-
-  // File upload (multiple)
-static uploadFiles = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.files || !(req.files as any[]).length) {
-    throw new AppError("No files uploaded", 400);
-  }
-
-  const uploadedFiles = (req.files as any[]).map((file) => {
-    const fileUrl = file.path || file.filename;
-    if (!fileUrl) {
-      throw new AppError(`Failed to get URL for file ${file.originalname}`, 500);
-    }
-
-    return {
-      fileName: file.originalname,
-      fileUrl,
-      fileType: file.mimetype,
-      fileSize: file.size,
-    };
-  });
-
-  console.log("Uploaded files info:", uploadedFiles);
-
-  res.status(201).json({
-    success: true,
-    files: uploadedFiles,
-  });
-});
 
 
 static create = asyncHandler(async (req: Request, res: Response) => {
@@ -341,11 +300,11 @@ static updateStatus = asyncHandler(async (req: Request, res: Response) => {
   });
 
 static downloadFile = asyncHandler(async (req: Request, res: Response) => {
-    const { fileId, filesId, submissionId } = req.params;
+    const { submissionId } = req.params;
+    const { fileId, files } = req.query as { fileId?: string; files?: string };
 
     if (!submissionId) throw new AppError("Submission ID is required", 400);
 
-    // Ensure the submission exists
     const submission = await prisma.submission.findUnique({
       where: { id: submissionId },
       include: { files: true },
@@ -353,79 +312,95 @@ static downloadFile = asyncHandler(async (req: Request, res: Response) => {
 
     if (!submission) throw new AppError("Submission not found", 404);
 
-    // SINGLE FILE DOWNLOAD
+    // --- Helper: Generate signed URL for any fileUrl ---
+    const getSignedUrl = (fileUrl: string) => {
+      try {
+        const match = fileUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.(\w+)$/);
+        if (!match) return null;
+        const publicId = match[1];
+        return cloudinary.url(publicId, { resource_type: "auto", sign_url: true });
+      } catch {
+        return null;
+      }
+    };
+
+    // --- Single file download ---
     if (fileId) {
       const file = submission.files.find((f) => f.id === fileId);
-      if (!file) throw new AppError("File not found in this submission", 404);
+      if (!file) throw new AppError("File not found", 404);
+
+      const signedUrl = getSignedUrl(file.fileUrl);
+      if (!signedUrl) {
+        return res.status(404).json({
+          success: false,
+          message: `File "${file.fileName}" not found on Cloudinary.`,
+        });
+      }
 
       await prisma.fileUpload.update({
-        where: { id: fileId },
+        where: { id: file.id },
         data: { downloadCount: { increment: 1 } },
       });
 
-      try {
-        const response = await axios.get(file.fileUrl, {
-          responseType: "stream",
-          validateStatus: (s) => s >= 200 && s < 300,
-          timeout: 15000,
-        });
-
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${file.fileName}"`
-        );
-        res.setHeader(
-          "Content-Type",
-          response.headers["content-type"] || "application/octet-stream"
-        );
-
-        response.data.pipe(res);
-      } catch (err: any) {
-        console.error("Download error:", err?.message);
-        throw new AppError(
-          `Failed to fetch remote file: ${err.message}`,
-          err.response?.status || 502
-        );
-      }
-      return;
+      return res.status(200).json({
+        success: true,
+        message: "File ready for download",
+        fileUrl: signedUrl,
+      });
     }
 
-    // MULTIPLE FILE DOWNLOAD
-    if (filesId) {
-      const ids = filesId.split(",").map((id) => id.trim());
-      const files = submission.files.filter((f) => ids.includes(f.id));
+    // --- Multiple files download ---
+    if (files) {
+      const ids = files.split(",").map((id) => id.trim()).filter(Boolean);
+      const selectedFiles = submission.files.filter((f) => ids.includes(f.id));
 
-      if (!files.length)
-        throw new AppError("No valid files found for this submission", 404);
+      if (!selectedFiles.length) throw new AppError("No valid files found", 404);
 
-      // Create a ZIP archive
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="submission-${submissionId}-files.zip"`
-      );
-      res.setHeader("Content-Type", "application/zip");
+      const zip = new JSZip();
+      const skippedFiles: string[] = [];
+      let addedCount = 0;
 
-      const archive = archiver("zip", { zlib: { level: 9 } });
-      archive.pipe(res);
+      for (const f of selectedFiles) {
+        const signedUrl = getSignedUrl(f.fileUrl);
+        if (!signedUrl) {
+          skippedFiles.push(f.fileName);
+          continue;
+        }
 
-      for (const file of files) {
         try {
-          const response = await axios.get(file.fileUrl, { responseType: "stream" });
-          archive.append(response.data, { name: file.fileName });
+          const fileResp = await axios.get(signedUrl, { responseType: "arraybuffer" });
+          zip.file(f.fileName, fileResp.data);
 
           await prisma.fileUpload.update({
-            where: { id: file.id },
+            where: { id: f.id },
             data: { downloadCount: { increment: 1 } },
           });
+
+          addedCount++;
         } catch (err: any) {
-          console.warn(`Failed to fetch file ${file.fileName}:`, err?.message);
+          console.error(`❌ Failed to fetch ${f.fileName}: ${err.message}`);
+          skippedFiles.push(f.fileName);
         }
       }
 
-      await archive.finalize();
-      return;
+      if (addedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "None of the selected files could be downloaded.",
+          skippedFiles,
+        });
+      }
+
+      const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=submission_${submissionId}.zip`
+      );
+      res.setHeader("Content-Type", "application/zip");
+      return res.send(zipBuffer);
     }
 
-    throw new AppError("Either fileId or filesId is required", 400);
+    throw new AppError("Provide ?fileId=... or ?files=id1,id2", 400);
   });
 }
+

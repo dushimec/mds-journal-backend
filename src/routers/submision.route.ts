@@ -1,7 +1,7 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { SubmissionController } from "../controllers/submission.controller";
 import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
-import { upload } from "../middlewares/upload";
+import { upload ,uploadFile, uploadFiles} from "../middlewares/upload";
 import {
   createSubmissionValidation,
   deleteSubmissionValidation,
@@ -36,15 +36,14 @@ router.post(
   authenticate,
   authorizeRoles(UserRole.AUTHOR),
   upload.single("file"),
-  SubmissionController.uploadFile
+  uploadFile
 );
 
 router.post(
   "/upload-multiple",
   authenticate,
   authorizeRoles(UserRole.AUTHOR),
-  upload.array("files", 5),
-  SubmissionController.uploadFiles
+  uploadFiles
 );
 
 router.get(
@@ -81,19 +80,7 @@ router.get(
   SubmissionController.stats
 );
 
-router.get(
-  "/:submissionId/files/:fileId/download",
-  authenticate,
-  authorizeRoles(UserRole.AUTHOR, UserRole.EDITOR, UserRole.REVIEWER, UserRole.ADMIN),
-  SubmissionController.downloadFile
-);
-
-router.get(
-  "/:submissionId/files/download/:filesId",
-  authenticate,
-  authorizeRoles(UserRole.AUTHOR, UserRole.EDITOR, UserRole.REVIEWER, UserRole.ADMIN),
-  SubmissionController.downloadFile
-);
+router.get("/:submissionId/download", SubmissionController.downloadFile);
 
 router.patch(
   "/:id/status",
