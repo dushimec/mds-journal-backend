@@ -312,19 +312,30 @@ static downloadFile = asyncHandler(async (req: Request, res: Response) => {
 
     if (!submission) throw new AppError("Submission not found", 404);
 
-    // --- Helper: Generate signed URL for any fileUrl ---
-    const getSignedUrl = (fileUrl: string) => {
-      try {
-        const match = fileUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.(\w+)$/);
-        if (!match) return null;
-        const publicId = match[1];
-        return cloudinary.url(publicId, { resource_type: "auto", sign_url: true });
-      } catch {
-        return null;
-      }
-    };
+const getSignedUrl = (fileUrl: string) => {
+try {
+    // Regex to extract everything after /upload/
+    const match = fileUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.(\w+)$/);
 
-    // --- Single file download ---
+    if (!match) return null;
+
+    const publicId = match[1]; // folder/file_name
+    const format = match[2];   // file extension
+
+    return cloudinary.url(publicId, {
+      resource_type: "auto",
+      format,
+      sign_url: true,
+      secure: true,
+    });
+
+  } catch (err) {
+    console.error("❌ Cloudinary URL parse failed:", err);
+    return null;
+  }
+};
+
+
     if (fileId) {
       const file = submission.files.find((f) => f.id === fileId);
       if (!file) throw new AppError("File not found", 404);
@@ -402,5 +413,50 @@ static downloadFile = asyncHandler(async (req: Request, res: Response) => {
 
     throw new AppError("Provide ?fileId=... or ?files=id1,id2", 400);
   });
+  static updateEditedFile = asyncHandler(async (req: Request, res: Response) => {
+  const { submissionId, fileId } = req.params;
+
+  // must receive a file from multer
+  const uploadedFile = req.file;
+  if (!uploadedFile) throw new AppError("No file uploaded", 400);
+
+  // check submission existence
+  const submission = await prisma.submission.findUnique({
+    where: { id: String(submissionId) },
+  });
+
+  if (!submission) throw new AppError("Submission not found", 404);
+
+  // check file existence
+  const oldFile = await prisma.fileUpload.findUnique({
+    where: { id: String(fileId) },
+  });
+
+  if (!oldFile) throw new AppError("File not found", 404);
+
+  // upload new file to Cloudinary
+  const cloud = await cloudinary.uploader.upload(uploadedFile.path, {
+    folder: "journal_files",
+    resource_type: "auto",
+  });
+
+  // update DB record (replace the old file completely)
+  const updated = await prisma.fileUpload.update({
+    where: { id: String(fileId) },
+    data: {
+      fileName: uploadedFile.originalname,
+      fileUrl: cloud.secure_url,
+      mimeType: uploadedFile.mimetype,
+      fileSize: uploadedFile.size,
+      isEdited: true,
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "File updated successfully",
+    data: updated,
+  });
+});
 }
 

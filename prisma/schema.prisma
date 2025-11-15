@@ -117,6 +117,7 @@ model FileUpload {
   secureUrl    String?
   mimeType     String
   fileSize     Int
+  isEdited   Boolean  @default(false)
   uploadDate   DateTime @default(now())
   downloadCount Int     @default(0)
 

@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { SubmissionController } from "../controllers/submission.controller";
+import { SubmissionController } from "../controllers/submissioncontroller";
 import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
 import { upload ,uploadFile, uploadFiles} from "../middlewares/upload";
 import {
@@ -95,5 +95,14 @@ router.patch(
   validate,
   SubmissionController.updateStatus
 );
+
+router.patch(
+  "/:submissionId/files/:fileId/edited",
+  authenticate,
+  authorizeRoles(UserRole.ADMIN),
+  upload.single("file"),
+  SubmissionController.updateEditedFile
+);
+
 
 export default router;
