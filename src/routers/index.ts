@@ -1,4 +1,3 @@
-
 import { Router } from "express";
 const route = Router();
 import authRoute from "./auth.route";
@@ -19,6 +18,8 @@ import authorGuidelineRoute from "./authorGuideline.route";
 import swaggerRoute from "./swagger.route";
 import logoRoute from "./logo.route"
 import announcementRoute from "./announcement.routes"
+import searchRoutes from "./search.routes";
+import { generateCrudRoutes } from "../utils/generateCrudRoutes";
 
 route.use(requestLogger);
 
@@ -39,6 +40,12 @@ route.use("/author-guidelines", authorGuidelineRoute);
 route.use("/docs", swaggerRoute);
 route.use("/logo", logoRoute);
 route.use("/announcements", announcementRoute);
+
+route.use("/search", searchRoutes);
+route.use("/users-crud", generateCrudRoutes("User"));
+route.use("/submissions-crud", generateCrudRoutes("Submission"));
+route.use("/topics-crud", generateCrudRoutes("Topic"));
+route.use("/journal-issues-crud", generateCrudRoutes("JournalIssue"));
 
 route.use(globalErrorHandler);
 
