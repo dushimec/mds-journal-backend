@@ -120,7 +120,7 @@ model FileUpload {
   uploadDate     DateTime    @default(now())
   downloadCount  Int         @default(0)
   createdAt      DateTime    @default(now())
-
+  isEdited       Boolean     @default(false)
   submissionId   String?
   submission     Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 }

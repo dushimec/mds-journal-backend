@@ -353,7 +353,69 @@ static updateStatus = asyncHandler(async (req: Request, res: Response) => {
     });
   });
 
+  static updateEditedFile = asyncHandler(async (req: Request, res: Response) => {
+  const { submissionId, fileId } = req.params;
 
+  // must receive a file from multer
+  const uploadedFile = req.file;
+  if (!uploadedFile) throw new AppError("No file uploaded", 400);
+
+  // check submission existence
+  const submission = await prisma.submission.findUnique({
+    where: { id: String(submissionId) },
+  });
+
+  if (!submission) throw new AppError("Submission not found", 404);
+
+  // check file existence
+  const oldFile = await prisma.fileUpload.findUnique({
+    where: { id: String(fileId) },
+  });
+
+  if (!oldFile) throw new AppError("File not found", 404);
+
+  // upload new file to Cloudinary
+  // upload new file to Cloudinary
+  let cloudResult: any = null;
+  try {
+    if (uploadedFile.buffer) {
+      // Prefer buffer upload (memory storage)
+      cloudResult = await uploadBufferWithRetry(uploadedFile.buffer, { resource_type: "auto", folder: "submissions" }, 3);
+    } else if (uploadedFile.path) {
+      // Fallback to path-based upload (disk storage)
+      cloudResult = await cloudinary.uploader.upload(uploadedFile.path, {
+        folder: "submissions",
+        resource_type: "auto",
+      });
+    } else {
+      throw new AppError("Uploaded file has no buffer or path", 400);
+    }
+
+    if (!cloudResult) throw new Error("Empty upload result");
+  } catch (err: any) {
+    console.error("Cloudinary upload error for edited file", uploadedFile.originalname, err);
+    throw new AppError(`File upload failed: ${err?.message || String(err)}`, 500);
+  }
+
+  // update DB record (replace the old file completely)
+  const updated = await prisma.fileUpload.update({
+    where: { id: String(fileId) },
+    data: {
+      fileName: uploadedFile.originalname,
+      fileUrl: cloudResult.secure_url ?? cloudResult.url,
+      mimeType: uploadedFile.mimetype,
+      fileSize: uploadedFile.size,
+      isEdited: true,
+      publicId: cloudResult.public_id ?? undefined,
+    },
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "File updated successfully",
+    data: updated,
+  });
+});
 }
 
 function getPagination(req: Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>): { skip: number; take: number; page: number } {
