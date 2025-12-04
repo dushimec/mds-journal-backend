@@ -375,20 +375,38 @@ static updateStatus = asyncHandler(async (req: Request, res: Response) => {
   if (!oldFile) throw new AppError("File not found", 404);
 
   // upload new file to Cloudinary
-  const cloud = await cloudinary.uploader.upload(uploadedFile.path, {
-    folder: "journal_files",
-    resource_type: "auto",
-  });
+  // upload new file to Cloudinary
+  let cloudResult: any = null;
+  try {
+    if (uploadedFile.buffer) {
+      // Prefer buffer upload (memory storage)
+      cloudResult = await uploadBufferWithRetry(uploadedFile.buffer, { resource_type: "auto", folder: "submissions" }, 3);
+    } else if (uploadedFile.path) {
+      // Fallback to path-based upload (disk storage)
+      cloudResult = await cloudinary.uploader.upload(uploadedFile.path, {
+        folder: "submissions",
+        resource_type: "auto",
+      });
+    } else {
+      throw new AppError("Uploaded file has no buffer or path", 400);
+    }
+
+    if (!cloudResult) throw new Error("Empty upload result");
+  } catch (err: any) {
+    console.error("Cloudinary upload error for edited file", uploadedFile.originalname, err);
+    throw new AppError(`File upload failed: ${err?.message || String(err)}`, 500);
+  }
 
   // update DB record (replace the old file completely)
   const updated = await prisma.fileUpload.update({
     where: { id: String(fileId) },
     data: {
       fileName: uploadedFile.originalname,
-      fileUrl: cloud.secure_url,
+      fileUrl: cloudResult.secure_url ?? cloudResult.url,
       mimeType: uploadedFile.mimetype,
       fileSize: uploadedFile.size,
       isEdited: true,
+      publicId: cloudResult.public_id ?? undefined,
     },
   });
 
