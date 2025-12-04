@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { SubmissionController } from "../controllers/submissioncontroller";
 import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
-import { upload ,uploadFile, uploadFiles} from "../middlewares/upload";
+import { downloadFile, downloadSubmissionFiles, downloadFirstSubmissionFile } from "../controllers/streamFile.controller";
+import { multipleUpload, upload } from "../middlewares/upload";
 import {
   createSubmissionValidation,
   deleteSubmissionValidation,
@@ -11,7 +12,7 @@ import {
   validate,
 } from "../middlewares/validations/submissionValidation";
 import { UserRole, SubmissionStatus } from "@prisma/client";
-import { body, param } from "express-validator";
+import { body, param, query } from "express-validator";
 
 const router = Router();
 
@@ -22,38 +23,28 @@ router.get(
   SubmissionController.getAll
 );
 
+router.get("/file/:fileId", downloadFile);
+
+router.get("/:submissionId/file/", downloadFirstSubmissionFile);
+
+router.get(
+  "/:submissionId/files/download",
+  authenticate,
+  authorizeRoles(UserRole.AUTHOR, UserRole.EDITOR, UserRole.ADMIN),
+  downloadSubmissionFiles
+);
+
 router.post(
   "/",
   authenticate,
   authorizeRoles(UserRole.AUTHOR),
   createSubmissionValidation,
   validate,
+   multipleUpload("files"),
   SubmissionController.create
 );
 
-router.post(
-  "/upload",
-  authenticate,
-  authorizeRoles(UserRole.AUTHOR),
-  upload.single("file"),
-  uploadFile
-);
-
-router.post(
-  "/upload-multiple",
-  authenticate,
-  authorizeRoles(UserRole.AUTHOR),
-  uploadFiles
-);
-
-router.get(
-  "/:id",
-  authenticate,
-  authorizeRoles(UserRole.ADMIN),
-  getByIdSubmissionValidation,
-  validate,
-  SubmissionController.getById
-);
+// NOTE: `/:id` route is defined later to avoid conflicting with more specific routes like `/download`.
 
 router.put(
   "/:id",
@@ -80,7 +71,16 @@ router.get(
   SubmissionController.stats
 );
 
-router.get("/:submissionId/download", SubmissionController.downloadFile);
+
+// Generic fetch by id (placed after more specific routes to avoid route conflicts)
+router.get(
+  "/:id",
+  authenticate,
+  authorizeRoles(UserRole.ADMIN),
+  getByIdSubmissionValidation,
+  validate,
+  SubmissionController.getById
+);
 
 router.patch(
   "/:id/status",

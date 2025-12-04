@@ -1,88 +1,121 @@
 import { Request, Response } from "express";
-import { matchedData } from "express-validator";
 import { prisma } from "../config/database";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
-import { UserRole, SubmissionStatus } from "@prisma/client";
-import axios from "axios";
+import cloudinary, { uploadBufferWithRetry } from "../utils/cloudinary";
+import { SubmissionStatus, FileType, UserRole } from "@prisma/client";
+import { ParamsDictionary } from "express-serve-static-core";
+import { ParsedQs } from "qs";
+import { matchedData } from "express-validator";
 import { sendSubmissionStatusEmail } from "../utils/email";
-import JSZip from "jszip";
-import { v2 as cloudinary } from "cloudinary";
-import "dotenv/config";
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-  secure: true,
-});
-
-const getPagination = (req: Request) => {
-  const page = Math.max(1, parseInt((matchedData(req) as any).page) || 1);
-  const limit = Math.min(100, parseInt((matchedData(req) as any).limit) || 10);
-  return { skip: (page - 1) * limit, take: limit, page };
-};
 
 export class SubmissionController {
 
+  static create = asyncHandler(async (req: Request, res: Response) => {
+    const data = req.body;
 
-static create = asyncHandler(async (req: Request, res: Response) => {
- 
+    if (!req.user) throw new AppError("User not authenticated", 401);
 
-  const data = matchedData(req);
-  if (Array.isArray(data.keywords) && data.keywords.length > 5) {
-    throw new AppError("You can only add up to 5 keywords.", 400);
-  }
+    const files = req.files as Express.Multer.File[] || [];
 
-  const submission = await prisma.submission.create({
-    data: {
-      manuscriptTitle: data.manuscriptTitle,
-      abstract: data.abstract,
-      topicId: data.topicId,
-      keywords: data.keywords,
-      status: SubmissionStatus.DRAFT,
-      userId: req.user?.userId ?? null,
-      submittedAt: new Date(),
+    const uploadedFiles: { fileName: string; fileUrl: string; secureUrl: string; mimeType: string; fileSize: number; fileType: "MANUSCRIPT"; publicId: string; }[] =  [];
 
-      authors: {
-        create: data.authors.map((a: any) => ({
-          fullName: a.fullName,
-          email: a.email,
-          affiliation: a.affiliation,
-          isCorresponding: a.isCorresponding,
-          order: a.order,
-          userId: req.user?.userId ?? null,
-        })),
+    // Multipart/form-data often serializes JSON fields as strings. Try to parse authors and declarations
+    // Accept both a JSON string, a single object, or an array.
+    const parsedAuthorsRaw = (data.authors ?? data.authorsJson ?? null);
+    let parsedAuthors: any[] = [];
+    if (parsedAuthorsRaw) {
+      if (typeof parsedAuthorsRaw === "string") {
+        try {
+          const p = JSON.parse(parsedAuthorsRaw);
+          parsedAuthors = Array.isArray(p) ? p : [p];
+        } catch (e) {
+          // Could be a comma-separated list or malformed JSON; leave as empty and log
+          console.warn("Failed to parse authors JSON string", parsedAuthorsRaw);
+        }
+      } else if (Array.isArray(parsedAuthorsRaw)) {
+        parsedAuthors = parsedAuthorsRaw;
+      } else if (typeof parsedAuthorsRaw === "object") {
+        parsedAuthors = [parsedAuthorsRaw];
+      }
+    }
+
+    const parsedDeclarationsRaw = (data.declarations ?? data.declarationsJson ?? null);
+    let parsedDeclarations: any[] = [];
+    if (parsedDeclarationsRaw) {
+      if (typeof parsedDeclarationsRaw === "string") {
+        try {
+          const p = JSON.parse(parsedDeclarationsRaw);
+          parsedDeclarations = Array.isArray(p) ? p : [p];
+        } catch (e) {
+          console.warn("Failed to parse declarations JSON string", parsedDeclarationsRaw);
+        }
+      } else if (Array.isArray(parsedDeclarationsRaw)) {
+        parsedDeclarations = parsedDeclarationsRaw;
+      } else if (typeof parsedDeclarationsRaw === "object") {
+        parsedDeclarations = [parsedDeclarationsRaw];
+      }
+    }
+    
+    for (const file of files) {
+      try {
+        const result = await uploadBufferWithRetry(file.buffer, { resource_type: "auto", folder: "submissions" }, 3);
+        if (!result) throw new Error("Empty upload result");
+
+        uploadedFiles.push({
+          fileName: file.originalname,
+          fileUrl: result.secure_url,
+          secureUrl: result.secure_url,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          fileType: FileType.MANUSCRIPT,
+          publicId: result.public_id,
+        });
+      } catch (err: any) {
+        console.error("Cloudinary upload error for file", file.originalname, err);
+        // Surface the underlying message but keep HTTP 500 for upload failures
+        throw new AppError(`File upload failed: ${err?.message || String(err)}`, 500);
+      }
+    }
+
+    const submission = await prisma.submission.create({
+      data: {
+        manuscriptTitle: data.manuscriptTitle,
+        abstract: data.abstract,
+        keywords: data.keywords,
+        status: SubmissionStatus.SUBMITTED,
+        userId: req.user.userId,
+        ...(parsedAuthors.length > 0 && {
+          authors: {
+            create: parsedAuthors.map((a: any, i: number) => ({
+              fullName: a.fullName,
+              email: a.email,
+              affiliation: a.affiliation,
+              isCorresponding: !!a.isCorresponding || i === 0,
+              order: i + 1,
+              userId: req.user?.userId,
+            })),
+          },
+        }),
+        ...(uploadedFiles.length > 0 && {
+          files: { create: uploadedFiles },
+        }),
+        ...(parsedDeclarations.length > 0 && {
+          declarations: {
+            create: parsedDeclarations.map((d: any) => ({
+              type: d.type,
+              isChecked: !!d.isChecked,
+              text: d.text,
+            })),
+          },
+        }),
       },
+      include: { authors: true, files: true, declarations: true },
+    });
 
-      files: {
-        create: data.files.map((f: any) => ({
-          fileName: f.fileName,
-          fileType: f.fileType,
-          fileUrl: f.fileUrl,
-          mimeType: f.mimeType,
-          fileSize: f.fileSize,
-        })),
-      },
-
-      declarations: {
-        create: data.declarations.map((d: any) => ({
-          type: d.type,
-          isChecked: d.isChecked,
-          text: d.text,
-        })),
-      },
-    },
-    include: {
-      authors: true,
-      files: true,
-      declarations: true,
-    },
+    res.status(201).json({ success: true, data: submission });
   });
-
-  res.status(201).json({ success: true, data: submission });
-});
-
 
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
@@ -280,139 +313,46 @@ static updateStatus = asyncHandler(async (req: Request, res: Response) => {
       by: ["status"],
       _count: true,
     });
-    const totalDownloads = await prisma.fileUpload.aggregate({
+
+    // Total downloads across all file uploads (safe for null return)
+    const totalDownloadsAgg = await prisma.fileUpload.aggregate({
       _sum: {
         downloadCount: true,
       },
+    });
+    const totalDownloads = totalDownloadsAgg._sum?.downloadCount ?? 0;
+
+    // Downloads grouped by submission (only include files tied to a submission)
+    const downloadsBySubmission = await prisma.fileUpload.groupBy({
+      by: ["submissionId"],
+      where: { submissionId: { not: null } },
+      _sum: { downloadCount: true },
+      orderBy: { _sum: { downloadCount: "desc" } },
+      take: 50,
+    });
+
+    // Top downloaded files (most useful for quick insights)
+    const topFiles = await prisma.fileUpload.findMany({
+      orderBy: { downloadCount: "desc" },
+      take: 10,
+      select: { id: true, fileName: true, submissionId: true, downloadCount: true, fileUrl: true },
     });
 
     res.json({
       success: true,
       data: {
         total,
-        byStatus: byStatus.map(({ status, _count }) => ({
-          status,
-          count: _count,
+        byStatus: byStatus.map(({ status, _count }) => ({ status, count: _count })),
+        totalDownloads,
+        downloadsBySubmission: downloadsBySubmission.map((d) => ({
+          submissionId: d.submissionId,
+          downloads: d._sum.downloadCount ?? 0,
         })),
-        totalDownloads: totalDownloads._sum.downloadCount || 0,
+        topFiles,
       },
     });
   });
 
-static downloadFile = asyncHandler(async (req: Request, res: Response) => {
-    const { submissionId } = req.params;
-    const { fileId, files } = req.query as { fileId?: string; files?: string };
-
-    if (!submissionId) throw new AppError("Submission ID is required", 400);
-
-    const submission = await prisma.submission.findUnique({
-      where: { id: submissionId },
-      include: { files: true },
-    });
-
-    if (!submission) throw new AppError("Submission not found", 404);
-
-const getSignedUrl = (fileUrl: string) => {
-try {
-    // Regex to extract everything after /upload/
-    const match = fileUrl.match(/\/upload\/(?:v\d+\/)?(.+)\.(\w+)$/);
-
-    if (!match) return null;
-
-    const publicId = match[1]; // folder/file_name
-    const format = match[2];   // file extension
-
-    return cloudinary.url(publicId, {
-      resource_type: "auto",
-      format,
-      sign_url: true,
-      secure: true,
-    });
-
-  } catch (err) {
-    console.error("❌ Cloudinary URL parse failed:", err);
-    return null;
-  }
-};
-
-
-    if (fileId) {
-      const file = submission.files.find((f) => f.id === fileId);
-      if (!file) throw new AppError("File not found", 404);
-
-      const signedUrl = getSignedUrl(file.fileUrl);
-      if (!signedUrl) {
-        return res.status(404).json({
-          success: false,
-          message: `File "${file.fileName}" not found on Cloudinary.`,
-        });
-      }
-
-      await prisma.fileUpload.update({
-        where: { id: file.id },
-        data: { downloadCount: { increment: 1 } },
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: "File ready for download",
-        fileUrl: signedUrl,
-      });
-    }
-
-    // --- Multiple files download ---
-    if (files) {
-      const ids = files.split(",").map((id) => id.trim()).filter(Boolean);
-      const selectedFiles = submission.files.filter((f) => ids.includes(f.id));
-
-      if (!selectedFiles.length) throw new AppError("No valid files found", 404);
-
-      const zip = new JSZip();
-      const skippedFiles: string[] = [];
-      let addedCount = 0;
-
-      for (const f of selectedFiles) {
-        const signedUrl = getSignedUrl(f.fileUrl);
-        if (!signedUrl) {
-          skippedFiles.push(f.fileName);
-          continue;
-        }
-
-        try {
-          const fileResp = await axios.get(signedUrl, { responseType: "arraybuffer" });
-          zip.file(f.fileName, fileResp.data);
-
-          await prisma.fileUpload.update({
-            where: { id: f.id },
-            data: { downloadCount: { increment: 1 } },
-          });
-
-          addedCount++;
-        } catch (err: any) {
-          console.error(`❌ Failed to fetch ${f.fileName}: ${err.message}`);
-          skippedFiles.push(f.fileName);
-        }
-      }
-
-      if (addedCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "None of the selected files could be downloaded.",
-          skippedFiles,
-        });
-      }
-
-      const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=submission_${submissionId}.zip`
-      );
-      res.setHeader("Content-Type", "application/zip");
-      return res.send(zipBuffer);
-    }
-
-    throw new AppError("Provide ?fileId=... or ?files=id1,id2", 400);
-  });
   static updateEditedFile = asyncHandler(async (req: Request, res: Response) => {
   const { submissionId, fileId } = req.params;
 
@@ -458,5 +398,23 @@ try {
     data: updated,
   });
 });
+}
+
+function getPagination(req: Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>): { skip: number; take: number; page: number } {
+
+  const q = req.query || {};
+
+  const rawPage = Array.isArray(q.page) ? q.page[0] : q.page;
+  const rawPerPage = Array.isArray(q.perPage) ? q.perPage[0] : (Array.isArray(q.limit) ? q.limit[0] : (Array.isArray(q.take) ? q.take[0] : q.take));
+
+  let page = parseInt(String(rawPage ?? "1"), 10);
+  let take = parseInt(String(rawPerPage ?? "10"), 10);
+
+  if (Number.isNaN(page) || page < 1) page = 1;
+  if (Number.isNaN(take) || take < 1) take = 10;
+
+  const skip = (page - 1) * take;
+
+  return { skip, take, page };
 }
 

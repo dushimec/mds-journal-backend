@@ -109,20 +109,24 @@ model Author {
 }
 
 model FileUpload {
-  id           String   @id @default(cuid())
-  fileName     String
-  fileType     FileType
-  fileUrl      String
-  secureUrl    String?
-  mimeType     String
-  fileSize     Int
-  isEdited   Boolean  @default(false)
-  uploadDate   DateTime @default(now())
-  downloadCount Int     @default(0)
 
-  submissionId String?
-  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+  id             String      @id @default(cuid())
+  isEdited   Boolean  @default(false)
+  fileName       String
+  fileType       FileType
+  fileUrl        String
+  secureUrl      String?
+  publicId       String?     
+  mimeType       String
+  fileSize       Int
+  uploadDate     DateTime    @default(now())
+  downloadCount  Int         @default(0)
+  createdAt      DateTime    @default(now())
+
+  submissionId   String?
+  submission     Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 }
+
 
 enum FileType {
   MANUSCRIPT

@@ -5,6 +5,7 @@ dotenv.config(); // MUST be first
 import "./types";
 import express from "express";
 import cors from "cors";
+import path from "path";
 import { logger } from "./utils/logger";
 import { Server, createServer } from "http";
 import { connectDB } from "./config/database";
@@ -16,7 +17,9 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Set timeout to 5 minutes
+// Serve uploaded files publicly from /uploads -> <project_root>/public/uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
+
 app.use((req, res, next) => {
   req.setTimeout(5 * 60 * 1000);
   res.setTimeout(5 * 60 * 1000);
