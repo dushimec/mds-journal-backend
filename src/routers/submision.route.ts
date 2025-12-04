@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { SubmissionController } from "../controllers/submissioncontroller";
+import { SubmissionController } from "../controllers/submission.controller";
 import { authenticate, authorizeRoles } from "../middlewares/authMiddleware";
 import { downloadFile, downloadSubmissionFiles, downloadFirstSubmissionFile } from "../controllers/streamFile.controller";
 import { multipleUpload, upload } from "../middlewares/upload";
