@@ -109,9 +109,7 @@ model Author {
 }
 
 model FileUpload {
-
   id             String      @id @default(cuid())
-  isEdited   Boolean  @default(false)
   fileName       String
   fileType       FileType
   fileUrl        String
