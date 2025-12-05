@@ -52,37 +52,38 @@ export class LogoController {
   });
 
   static updateSettings = asyncHandler(async (req: Request, res: Response) => {
-    const { name, publisher, issn } = req.body;
+  const { name, publisher, issn } = req.body;
 
-    const settings = await prisma.journalSettings.findUnique({
-      where: { id: "settings" },
-    });
+  let logoUrl: string | undefined;
+  if (req.file) {
+    const file = req.file as any;
+    logoUrl = file.path || file.filename;
+    if (!logoUrl) throw new AppError("Failed to retrieve Cloudinary URL", 500);
+  }
 
-    if (!settings) throw new AppError("Settings not found. Use POST to create first.", 404);
-
-    let logoUrl: string | undefined;
-    if (req.file) {
-      const file = req.file as any;
-      logoUrl = file.path || file.filename;
-      if (!logoUrl) throw new AppError("Failed to retrieve Cloudinary URL", 500);
-    }
-
-    const updated = await prisma.journalSettings.update({
-      where: { id: "settings" },
-      data: {
-        name: name || settings.name,
-        publisher: publisher || settings.publisher,
-        issn: issn || settings.issn,
-        ...(logoUrl && { logoUrl }),
-      },
-    });
-
-    res.json({
-      success: true,
-      message: "Journal settings updated successfully",
-      data: updated,
-    });
+  const updated = await prisma.journalSettings.upsert({
+    where: { id: "settings" },
+    update: {
+      ...(name && { name }),
+      ...(publisher && { publisher }),
+      ...(issn && { issn }),
+      ...(logoUrl && { logoUrl }),
+    },
+    create: {
+      id: "settings",
+      name: name || "Default Journal Name",
+      publisher: publisher || "Default Publisher",
+      issn: issn || "0000-0000",
+      ...(logoUrl && { logoUrl }),
+    },
   });
+
+  res.json({
+    success: true,
+    message: "Journal settings saved successfully",
+    data: updated,
+  });
+});
 
   static deleteLogo = asyncHandler(async (_req: Request, res: Response) => {
     const settings = await prisma.journalSettings.findUnique({
