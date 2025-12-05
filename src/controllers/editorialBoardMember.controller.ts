@@ -3,6 +3,7 @@ import { matchedData } from "express-validator";
 import { prisma } from "../config/database";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
+import cloudinary, { uploadBufferWithRetry } from "../utils/cloudinary";
 import { UserRole } from "@prisma/client";
 
 export class EditorialBoardMemberController {
@@ -17,7 +18,23 @@ export class EditorialBoardMemberController {
       isActive,
     } = req.body;
 
-    const profileImage = (req.file as any)?.path; // ✅ Cloudinary URL
+    let profileImage: string | null = null;
+    if (req.file) {
+      const file = req.file as any;
+      try {
+        let result: any = null;
+        if (file.buffer) {
+          result = await uploadBufferWithRetry(file.buffer, { resource_type: "auto", folder: "profiles" }, 3);
+        } else if (file.path) {
+          result = await cloudinary.uploader.upload(file.path, { resource_type: "auto", folder: "profiles" });
+        }
+
+        profileImage = result?.secure_url ?? result?.url ?? file.path ?? file.filename ?? null;
+      } catch (err: any) {
+        console.error("Profile image upload error:", err);
+        throw new AppError("Failed to upload profile image", 500);
+      }
+    }
 
     const member = await prisma.editorialBoardMember.create({
       data: {
@@ -69,9 +86,23 @@ static update = asyncHandler(async (req: Request, res: Response) => {
     payload.order = parseInt(payload.order, 10) || 0;
   }
 
-  // Handle uploaded file
+  // Handle uploaded file (support memoryStorage buffer or path from cloud storage)
   if (req.file) {
-    payload.profileImage = (req.file as any).path;
+    const file = req.file as any;
+    try {
+      let result: any = null;
+      if (file.buffer) {
+        result = await uploadBufferWithRetry(file.buffer, { resource_type: "auto", folder: "profiles" }, 3);
+      } else if (file.path) {
+        result = await cloudinary.uploader.upload(file.path, { resource_type: "auto", folder: "profiles" });
+      }
+
+      const profileUrl = result?.secure_url ?? result?.url ?? file.path ?? file.filename ?? null;
+      if (profileUrl) payload.profileImage = profileUrl;
+    } catch (err: any) {
+      console.error("Profile image upload error:", err);
+      throw new AppError("Failed to upload profile image", 500);
+    }
   }
 
   // Check if member exists
