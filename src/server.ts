@@ -15,7 +15,16 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+
+const corsOptions = {
+  origin: ['https://www.jaedp.org',"http://localhost:3000" ],
+  credentials: true,                 
+  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Requested-With']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Serve uploaded files publicly from /uploads -> <project_root>/public/uploads
 app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
