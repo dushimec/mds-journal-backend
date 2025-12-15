@@ -24,9 +24,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
-// Serve uploaded files publicly from /uploads -> <project_root>/public/uploads
 app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
 app.use((req, res, next) => {
