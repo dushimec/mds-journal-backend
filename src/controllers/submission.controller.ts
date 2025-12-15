@@ -3,19 +3,54 @@ import { prisma } from "../config/database";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
 import cloudinary, { uploadBufferWithRetry } from "../utils/cloudinary";
-import { SubmissionStatus, FileType, UserRole } from "@prisma/client";
+import { SubmissionStatus, FileType, UserRole, Prisma } from "@prisma/client";
 import { ParamsDictionary } from "express-serve-static-core";
 import { ParsedQs } from "qs";
 import { matchedData } from "express-validator";
 import { sendSubmissionStatusEmail } from "../utils/email";
 
 export class SubmissionController {
-  static create = asyncHandler(async (req: Request, res: Response) => {
-    const data = req.body;
-
+   static create = asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw new AppError("User not authenticated", 401);
 
-    const files = (req.files as Express.Multer.File[]) || [];
+  const data = req.body;
+  const files = (req.files as Express.Multer.File[]) || [];
+
+  // --- Parse topic (allow topicId or topic name in body) ---
+  const rawTopic = (data && (data.topicId ?? data.topic)) ?? null;
+  let topicConnect:
+    | { connect: { id: string } }
+    | { create: { name: string } }
+    | undefined = undefined;
+
+  if (rawTopic) {
+    const rawTopicStr = String(rawTopic);
+    let existingTopicById = null as any;
+    try {
+      existingTopicById = await prisma.topic.findUnique({ where: { id: rawTopicStr } });
+    } catch (e) {
+      existingTopicById = null;
+    }
+
+    if (existingTopicById) {
+      topicConnect = { connect: { id: existingTopicById.id } };
+    } else {
+      // Try by name
+      let existingTopicByName = null as any;
+      try {
+        existingTopicByName = await prisma.topic.findUnique({ where: { name: rawTopicStr } });
+      } catch (e) {
+        existingTopicByName = null;
+      }
+
+      if (existingTopicByName) {
+        topicConnect = { connect: { id: existingTopicByName.id } };
+      } else {
+        // Create new topic with provided string as name
+        topicConnect = { create: { name: rawTopicStr } };
+      }
+    }
+  }
 
     const uploadedFiles: {
       fileName: string;
@@ -23,12 +58,11 @@ export class SubmissionController {
       secureUrl: string;
       mimeType: string;
       fileSize: number;
-      fileType: "MANUSCRIPT";
+      fileType: FileType;
       publicId: string;
     }[] = [];
 
-    // Multipart/form-data often serializes JSON fields as strings. Try to parse authors and declarations
-    // Accept both a JSON string, a single object, or an array.
+    // --- Parse authors robustly ---
     const parsedAuthorsRaw = data.authors ?? data.authorsJson ?? null;
     let parsedAuthors: any[] = [];
     if (parsedAuthorsRaw) {
@@ -36,45 +70,43 @@ export class SubmissionController {
         try {
           const p = JSON.parse(parsedAuthorsRaw);
           parsedAuthors = Array.isArray(p) ? p : [p];
-        } catch (e) {
-          // Could be a comma-separated list or malformed JSON; leave as empty and log
+        } catch {
           console.warn("Failed to parse authors JSON string", parsedAuthorsRaw);
         }
-      } else if (Array.isArray(parsedAuthorsRaw)) {
-        parsedAuthors = parsedAuthorsRaw;
-      } else if (typeof parsedAuthorsRaw === "object") {
-        parsedAuthors = [parsedAuthorsRaw];
-      }
+      } else if (Array.isArray(parsedAuthorsRaw)) parsedAuthors = parsedAuthorsRaw;
+      else if (typeof parsedAuthorsRaw === "object") parsedAuthors = [parsedAuthorsRaw];
     }
 
-    const parsedDeclarationsRaw =
-      data.declarations ?? data.declarationsJson ?? null;
+    // --- Parse declarations robustly ---
+    const parsedDeclarationsRaw = data.declarations ?? data.declarationsJson ?? null;
     let parsedDeclarations: any[] = [];
     if (parsedDeclarationsRaw) {
       if (typeof parsedDeclarationsRaw === "string") {
         try {
           const p = JSON.parse(parsedDeclarationsRaw);
           parsedDeclarations = Array.isArray(p) ? p : [p];
-        } catch (e) {
-          console.warn(
-            "Failed to parse declarations JSON string",
-            parsedDeclarationsRaw
-          );
+        } catch {
+          console.warn("Failed to parse declarations JSON string", parsedDeclarationsRaw);
         }
-      } else if (Array.isArray(parsedDeclarationsRaw)) {
-        parsedDeclarations = parsedDeclarationsRaw;
-      } else if (typeof parsedDeclarationsRaw === "object") {
-        parsedDeclarations = [parsedDeclarationsRaw];
-      }
+      } else if (Array.isArray(parsedDeclarationsRaw)) parsedDeclarations = parsedDeclarationsRaw;
+      else if (typeof parsedDeclarationsRaw === "object") parsedDeclarations = [parsedDeclarationsRaw];
     }
 
+    // --- Upload files to Cloudinary ---
     for (const file of files) {
       try {
-        const result = await uploadBufferWithRetry(
-          file.buffer,
-          { resource_type: "auto", folder: "submissions" },
-          3
-        );
+  // Create a unique public_id (don't duplicate the folder - folder is provided to Cloudinary separately)
+  const safeName = file.originalname.replace(/\s+/g, "_");
+  const publicId = `${Date.now()}_${safeName}`;
+
+
+        const result = await uploadBufferWithRetry(file.buffer, {
+          type: "upload", 
+          folder: "submissions",
+          resource_type: "raw", 
+          public_id: publicId,
+        }, 3);
+
         if (!result) throw new Error("Empty upload result");
 
         uploadedFiles.push({
@@ -87,56 +119,48 @@ export class SubmissionController {
           publicId: result.public_id,
         });
       } catch (err: any) {
-        console.error(
-          "Cloudinary upload error for file",
-          file.originalname,
-          err
-        );
-        // Surface the underlying message but keep HTTP 500 for upload failures
-        throw new AppError(
-          `File upload failed: ${err?.message || String(err)}`,
-          500
-        );
+        console.error("Cloudinary upload error for file", file.originalname, err);
+        throw new AppError(`File upload failed: ${err?.message || String(err)}`, 500);
       }
     }
+    const createData: Prisma.SubmissionCreateInput = {
+      manuscriptTitle: data.manuscriptTitle,
+      abstract: data.abstract,
+      keywords: data.keywords,
+      status: SubmissionStatus.SUBMITTED,
+      user: { connect: { id: req.user.userId } },
+      ...(parsedAuthors.length > 0 && {
+        authors: {
+          create: parsedAuthors.map((a: any, i: number) => ({
+            fullName: a.fullName,
+            email: a.email,
+            affiliation: a.affiliation,
+            isCorresponding: !!a.isCorresponding || i === 0,
+            order: i + 1,
+          })),
+        },
+      }),
+      ...(uploadedFiles.length > 0 && { files: { create: uploadedFiles } }),
+      ...(parsedDeclarations.length > 0 && {
+        declarations: {
+          create: parsedDeclarations.map((d: any) => ({
+            type: d.type,
+            isChecked: !!d.isChecked,
+            text: d.text,
+          })),
+        },
+      }),
+      ...(topicConnect && { topic: topicConnect }),
+    };
 
     const submission = await prisma.submission.create({
-      data: {
-        manuscriptTitle: data.manuscriptTitle,
-        abstract: data.abstract,
-        keywords: data.keywords,
-        status: SubmissionStatus.SUBMITTED,
-        userId: req.user.userId,
-        ...(parsedAuthors.length > 0 && {
-          authors: {
-            create: parsedAuthors.map((a: any, i: number) => ({
-              fullName: a.fullName,
-              email: a.email,
-              affiliation: a.affiliation,
-              isCorresponding: !!a.isCorresponding || i === 0,
-              order: i + 1,
-              userId: req.user?.userId,
-            })),
-          },
-        }),
-        ...(uploadedFiles.length > 0 && {
-          files: { create: uploadedFiles },
-        }),
-        ...(parsedDeclarations.length > 0 && {
-          declarations: {
-            create: parsedDeclarations.map((d: any) => ({
-              type: d.type,
-              isChecked: !!d.isChecked,
-              text: d.text,
-            })),
-          },
-        }),
-      },
-      include: { authors: true, files: true, declarations: true },
+      data: createData,
+      include: { authors: true, files: true, declarations: true, topic: true },
     });
 
     res.status(201).json({ success: true, data: submission });
   });
+
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
     const { skip, take, page } = getPagination(req);
@@ -198,9 +222,38 @@ export class SubmissionController {
       }
     }
 
+    // If a topicId was provided, attempt to connect by id, then by name; otherwise create it.
+    let topicDataForUpdate: { connect?: { id: string }; create?: { name: string } } | undefined = undefined;
+    if (topicId) {
+      const tStr = String(topicId);
+      let existingById = null as any;
+      try {
+        existingById = await prisma.topic.findUnique({ where: { id: tStr } });
+      } catch (e) {
+        existingById = null;
+      }
+
+      if (existingById) {
+        topicDataForUpdate = { connect: { id: existingById.id } };
+      } else {
+        let existingByName = null as any;
+        try {
+          existingByName = await prisma.topic.findUnique({ where: { name: tStr } });
+        } catch (e) {
+          existingByName = null;
+        }
+
+        if (existingByName) {
+          topicDataForUpdate = { connect: { id: existingByName.id } };
+        } else {
+          topicDataForUpdate = { create: { name: tStr } };
+        }
+      }
+    }
+
     const updated = await prisma.submission.update({
       where: { id: String(id) },
-      data: { ...data, topic: { connect: { id: topicId } } },
+      data: { ...data, ...(topicDataForUpdate && { topic: topicDataForUpdate }) },
       include: { authors: true, files: true, declarations: true },
     });
 
