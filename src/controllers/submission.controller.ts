@@ -2,165 +2,73 @@ import { Request, Response } from "express";
 import { prisma } from "../config/database";
 import { asyncHandler } from "../utils/asyncHandler";
 import { AppError } from "../utils/appError";
-import cloudinary, { uploadBufferWithRetry } from "../utils/cloudinary";
 import { SubmissionStatus, FileType, UserRole, Prisma } from "@prisma/client";
 import { ParamsDictionary } from "express-serve-static-core";
 import { ParsedQs } from "qs";
 import { matchedData } from "express-validator";
 import { sendSubmissionStatusEmail } from "../utils/email";
+import { assignDoiToSubmission } from "../utils/doi";
+import { uploadToR2 } from "../utils/r2Upload";
 
 export class SubmissionController {
-   static create = asyncHandler(async (req: Request, res: Response) => {
-    if (!req.user) throw new AppError("User not authenticated", 401);
+ static create = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw new AppError("User not authenticated", 401);
 
   const data = req.body;
   const files = (req.files as Express.Multer.File[]) || [];
 
-  // --- Parse topic (allow topicId or topic name in body) ---
-  const rawTopic = (data && (data.topicId ?? data.topic)) ?? null;
-  let topicConnect:
-    | { connect: { id: string } }
-    | { create: { name: string } }
-    | undefined = undefined;
-
-  if (rawTopic) {
-    const rawTopicStr = String(rawTopic);
-    let existingTopicById = null as any;
-    try {
-      existingTopicById = await prisma.topic.findUnique({ where: { id: rawTopicStr } });
-    } catch (e) {
-      existingTopicById = null;
-    }
-
-    if (existingTopicById) {
-      topicConnect = { connect: { id: existingTopicById.id } };
-    } else {
-      // Try by name
-      let existingTopicByName = null as any;
-      try {
-        existingTopicByName = await prisma.topic.findUnique({ where: { name: rawTopicStr } });
-      } catch (e) {
-        existingTopicByName = null;
-      }
-
-      if (existingTopicByName) {
-        topicConnect = { connect: { id: existingTopicByName.id } };
-      } else {
-        // Create new topic with provided string as name
-        topicConnect = { create: { name: rawTopicStr } };
-      }
-    }
+  if (!files.length) {
+    throw new AppError("PDF manuscript is required", 400);
   }
 
-    const uploadedFiles: {
-      fileName: string;
-      fileUrl: string;
-      secureUrl: string;
-      mimeType: string;
-      fileSize: number;
-      fileType: FileType;
-      publicId: string;
-    }[] = [];
+  const uploadedFiles = [];
 
-    // --- Parse authors robustly ---
-    const parsedAuthorsRaw = data.authors ?? data.authorsJson ?? null;
-    let parsedAuthors: any[] = [];
-    if (parsedAuthorsRaw) {
-      if (typeof parsedAuthorsRaw === "string") {
-        try {
-          const p = JSON.parse(parsedAuthorsRaw);
-          parsedAuthors = Array.isArray(p) ? p : [p];
-        } catch {
-          console.warn("Failed to parse authors JSON string", parsedAuthorsRaw);
-        }
-      } else if (Array.isArray(parsedAuthorsRaw)) parsedAuthors = parsedAuthorsRaw;
-      else if (typeof parsedAuthorsRaw === "object") parsedAuthors = [parsedAuthorsRaw];
-    }
-
-    // --- Parse declarations robustly ---
-    const parsedDeclarationsRaw = data.declarations ?? data.declarationsJson ?? null;
-    let parsedDeclarations: any[] = [];
-    if (parsedDeclarationsRaw) {
-      if (typeof parsedDeclarationsRaw === "string") {
-        try {
-          const p = JSON.parse(parsedDeclarationsRaw);
-          parsedDeclarations = Array.isArray(p) ? p : [p];
-        } catch {
-          console.warn("Failed to parse declarations JSON string", parsedDeclarationsRaw);
-        }
-      } else if (Array.isArray(parsedDeclarationsRaw)) parsedDeclarations = parsedDeclarationsRaw;
-      else if (typeof parsedDeclarationsRaw === "object") parsedDeclarations = [parsedDeclarationsRaw];
-    }
-
-    // --- Upload files to Cloudinary ---
+  try {
     for (const file of files) {
-      try {
-  // Create a unique public_id (don't duplicate the folder - folder is provided to Cloudinary separately)
-  const safeName = file.originalname.replace(/\s+/g, "_");
-  const publicId = `${Date.now()}_${safeName}`;
+      const key = `submissions/temp/${file.originalname}`;
 
+      const publicUrl = await uploadToR2({
+        buffer: file.buffer,
+        key,
+        contentType: file.mimetype
+      });
 
-        const result = await uploadBufferWithRetry(file.buffer, {
-          type: "upload", 
-          folder: "submissions",
-          resource_type: "raw", 
-          public_id: publicId,
-        }, 3);
-
-        if (!result) throw new Error("Empty upload result");
-
-        uploadedFiles.push({
-          fileName: file.originalname,
-          fileUrl: result.secure_url,
-          secureUrl: result.secure_url,
-          mimeType: file.mimetype,
-          fileSize: file.size,
-          fileType: FileType.MANUSCRIPT,
-          publicId: result.public_id,
-        });
-      } catch (err: any) {
-        console.error("Cloudinary upload error for file", file.originalname, err);
-        throw new AppError(`File upload failed: ${err?.message || String(err)}`, 500);
-      }
+      uploadedFiles.push({
+        fileName: file.originalname,
+        fileUrl: publicUrl,
+        mimeType: file.mimetype,
+        fileSize: file.size,
+        fileType: FileType.MANUSCRIPT,
+        publicId: key,
+      });
     }
-    const createData: Prisma.SubmissionCreateInput = {
-      manuscriptTitle: data.manuscriptTitle,
-      abstract: data.abstract,
-      keywords: data.keywords,
-      status: SubmissionStatus.SUBMITTED,
-      user: { connect: { id: req.user.userId } },
-      ...(parsedAuthors.length > 0 && {
-        authors: {
-          create: parsedAuthors.map((a: any, i: number) => ({
-            fullName: a.fullName,
-            email: a.email,
-            affiliation: a.affiliation,
-            isCorresponding: !!a.isCorresponding || i === 0,
-            order: i + 1,
-          })),
-        },
-      }),
-      ...(uploadedFiles.length > 0 && { files: { create: uploadedFiles } }),
-      ...(parsedDeclarations.length > 0 && {
-        declarations: {
-          create: parsedDeclarations.map((d: any) => ({
-            type: d.type,
-            isChecked: !!d.isChecked,
-            text: d.text,
-          })),
-        },
-      }),
-      ...(topicConnect && { topic: topicConnect }),
-    };
+  } catch (error: any) {
+    console.error("R2 Upload Error:", error);
+    throw new AppError(`File upload failed: ${error?.message || "Unknown error"}`, 500);
+  }
 
+  try {
     const submission = await prisma.submission.create({
-      data: createData,
-      include: { authors: true, files: true, declarations: true, topic: true },
+      data: {
+        manuscriptTitle: data.manuscriptTitle,
+        abstract: data.abstract,
+        keywords: data.keywords,
+        status: SubmissionStatus.SUBMITTED,
+        user: { connect: { id: req.user.userId } },
+        files: { create: uploadedFiles },
+      },
+      include: { files: true },
     });
 
-    res.status(201).json({ success: true, data: submission });
-  });
-
+    res.status(201).json({
+      success: true,
+      data: submission,
+    });
+  } catch (error: any) {
+    console.error("Database Error:", error);
+    throw new AppError(`Failed to create submission: ${error?.message || "Unknown error"}`, 500);
+  }
+});
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
     const { skip, take, page } = getPagination(req);
@@ -315,6 +223,14 @@ export class SubmissionController {
 
       case SubmissionStatus.PUBLISHED:
         data.publishedAt = now;
+        // Generate and assign DOI when publishing
+        try {
+          const doiSlug = await assignDoiToSubmission(id);
+          data.doiSlug = doiSlug;
+        } catch (error) {
+          console.error("Failed to assign DOI:", error);
+          // Continue without DOI for now - could be handled manually later
+        }
         break;
 
       case SubmissionStatus.REJECTED:
@@ -440,82 +356,39 @@ export class SubmissionController {
     });
   });
 
-  static updateEditedFile = asyncHandler(
-    async (req: Request, res: Response) => {
-      const { submissionId, fileId } = req.params;
+ static updateEditedFile = asyncHandler(async (req: Request, res: Response) => {
+ const { submissionId, fileId } = req.params;
+ const file = req.file;
 
-      // must receive a file from multer
-      const uploadedFile = req.file;
-      if (!uploadedFile) throw new AppError("No file uploaded", 400);
+ if (!file) throw new AppError("No file uploaded", 400);
 
-      // check submission existence
-      const submission = await prisma.submission.findUnique({
-        where: { id: String(submissionId) },
-      });
+ const key = `submissions/${submissionId}/edited-${fileId}.pdf`;
 
-      if (!submission) throw new AppError("Submission not found", 404);
+ const publicUrl = await uploadToR2({
+   buffer: file.buffer,
+   key,
+   contentType: file.mimetype
+ });
 
-      // check file existence
-      const oldFile = await prisma.fileUpload.findUnique({
-        where: { id: String(fileId) },
-      });
+ const updatedFile = await prisma.fileUpload.update({
+   where: { id: fileId },
+   data: {
+     fileName: file.originalname,
+     fileUrl: publicUrl,
+     mimeType: file.mimetype,
+     fileSize: file.size,
+     isEdited: true,
+     publicId: key,
+   },
+ });
 
-      if (!oldFile) throw new AppError("File not found", 404);
-
-      // upload new file to Cloudinary
-      // upload new file to Cloudinary
-      let cloudResult: any = null;
-      try {
-        if (uploadedFile.buffer) {
-          // Prefer buffer upload (memory storage)
-          cloudResult = await uploadBufferWithRetry(
-            uploadedFile.buffer,
-            { resource_type: "auto", folder: "submissions" },
-            3
-          );
-        } else if (uploadedFile.path) {
-          // Fallback to path-based upload (disk storage)
-          cloudResult = await cloudinary.uploader.upload(uploadedFile.path, {
-            folder: "submissions",
-            resource_type: "auto",
-          });
-        } else {
-          throw new AppError("Uploaded file has no buffer or path", 400);
-        }
-
-        if (!cloudResult) throw new Error("Empty upload result");
-      } catch (err: any) {
-        console.error(
-          "Cloudinary upload error for edited file",
-          uploadedFile.originalname,
-          err
-        );
-        throw new AppError(
-          `File upload failed: ${err?.message || String(err)}`,
-          500
-        );
-      }
-
-      // update DB record (replace the old file completely)
-      const updated = await prisma.fileUpload.update({
-        where: { id: String(fileId) },
-        data: {
-          fileName: uploadedFile.originalname,
-          fileUrl: cloudResult.secure_url ?? cloudResult.url,
-          mimeType: uploadedFile.mimetype,
-          fileSize: uploadedFile.size,
-          isEdited: true,
-          publicId: cloudResult.public_id ?? undefined,
-        },
-      });
-
-      res.status(200).json({
-        success: true,
-        message: "File updated successfully",
-        data: updated,
-      });
-    }
-  );
+ res.status(200).json({
+   success: true,
+   message: "File updated successfully",
+   data: updatedFile,
+ });
+});
+  
 }
 
 function getPagination(
@@ -542,3 +415,5 @@ function getPagination(
 
   return { skip, take, page };
 }
+
+

@@ -19,6 +19,7 @@ import swaggerRoute from "./swagger.route";
 import logoRoute from "./logo.route"
 import announcementRoute from "./announcement.routes"
 import searchRoutes from "./search.routes";
+import articleRoutes from "./article.routes";
 import { generateCrudRoutes } from "../utils/generateCrudRoutes";
 
 route.use(requestLogger);
@@ -42,6 +43,7 @@ route.use("/logo", logoRoute);
 route.use("/announcements", announcementRoute);
 
 route.use("/search", searchRoutes);
+route.use("/article", articleRoutes);
 route.use("/users-crud", generateCrudRoutes("User"));
 route.use("/submissions-crud", generateCrudRoutes("Submission"));
 route.use("/topics-crud", generateCrudRoutes("Topic"));

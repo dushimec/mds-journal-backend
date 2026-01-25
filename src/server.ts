@@ -43,6 +43,84 @@ app.get('/', (req, res) => {
 const api = process.env.API_URL || '/api';
 app.use(api, mainRoute);
 
+
+
+// PDF URL route
+app.get('/mds/article-pdf/:doiSlug/url', async (req, res) => {
+  const { prisma } = await import('./config/database');
+  const cloudinary = (await import('./utils/cloudinary')).default;
+  const doiSlug = req.params.doiSlug;
+
+  const submission = await prisma.submission.findFirst({
+    where: {
+      doiSlug,
+      status: "PUBLISHED",
+    },
+    include: {
+      files: {
+        where: {
+          fileType: "MANUSCRIPT",
+        },
+      },
+    },
+  });
+
+  if (!submission) {
+    return res.status(404).json({ success: false, message: "Article not found or not published" });
+  }
+
+  const manuscriptFile = submission.files[0];
+  if (!manuscriptFile) {
+    return res.status(404).json({ success: false, message: "Manuscript file not available" });
+  }
+
+  let viewUrl = manuscriptFile.secureUrl;
+  if (!viewUrl) {
+    viewUrl = cloudinary.url(manuscriptFile.publicId || "", {
+      resource_type: "raw",
+      type: "upload",
+      secure: true,
+      sign_url: true,
+    });
+  }
+
+  // Increment download count for viewing
+  await prisma.fileUpload.update({
+    where: { id: manuscriptFile.id },
+    data: { downloadCount: { increment: 1 } },
+  });
+
+  res.json({ url: viewUrl });
+});
+
+// Global error handler middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  logger.error(`Unhandled error: ${err.name || 'Unknown Error'}`, {
+    message: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+  });
+
+  // Check if it's a network error (AggregateError, connection timeout, etc.)
+  if (err instanceof AggregateError || err.name === 'AggregateError' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+    return res.status(503).json({
+      success: false,
+      message: 'Service unavailable: Network or database connection issue',
+    });
+  }
+
+  // Check if response already sent
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message || 'Internal server error',
+  });
+});
+
 // Start server
 const server: Server = createServer(app);
 const PORT = Number(process.env.PORT) || 5000;
@@ -56,3 +134,6 @@ const PORT = Number(process.env.PORT) || 5000;
     process.exit(1);
   }
 })();
+
+// Export app for testing
+export { app };

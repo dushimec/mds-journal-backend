@@ -52,6 +52,7 @@ model Submission {
   abstract        String?
   keywords        String?
   manuscriptType  SubmissionManuscriptType?
+  doiSlug         String?  @unique
   submittedAt     DateTime?
   reviewStartedAt DateTime?      // 🆕 Added
   publishedAt     DateTime?      // 🆕 Added
