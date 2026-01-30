@@ -280,10 +280,12 @@ export class SubmissionController {
       case SubmissionStatus.UNDER_REVIEW:
         data.reviewStartedAt = now;
         break;
-      case SubmissionStatus.PUBLISHED: {
+     
+     case SubmissionStatus.PUBLISHED: {
+  const now = new Date();
   data.publishedAt = now;
 
-  /* --------------------------------
+  /* -------------------------------
      AUTO-GENERATE Volume / Issue and JournalIssue
   -------------------------------- */
   const lastJournalIssue = await prisma.journalIssue.findFirst({
@@ -307,7 +309,6 @@ export class SubmissionController {
     }
   }
 
-  // Ensure a JournalIssue record exists
   let journalIssue = await prisma.journalIssue.findFirst({
     where: { volume: volumeNum, issue: issueNum },
   });
@@ -326,49 +327,41 @@ export class SubmissionController {
   data.issue = issueNum;
   data.journalIssue = { connect: { id: journalIssue.id } };
 
-  /* --------------------------------
-     1. Generate DOI + SEO Name ONLY IF MISSING
+  /* -------------------------------
+     ASSIGN DOI + SEO
   -------------------------------- */
-  if (!submission.doiSlug) {
-    try {
-      const result = await assignDoiToSubmission(id);
-      data.seoPdfName = result.seoPdfName;
-      data.doiSlug = result.doiSlug;
-    } catch (err) {
-      console.error("DOI Error:", err);
-    }
-  }
+  try {
+    const { doiSlug, seoPdfName } = await assignDoiToSubmission(id);
 
-  /* --------------------------------
-     2. Generate Article Slug (still optional)
-  -------------------------------- */
-  if (submission.manuscriptTitle && (data.doiSlug || submission.doiSlug)) {
-    const safeDoi = (data.doiSlug || submission.doiSlug!)
-      .replace(/\//g, "-")
-      .replace(/\./g, "-");
+    data.doiSlug = doiSlug;
+    data.seoPdfName = seoPdfName;
 
-    const titleSlug = slugify(submission.manuscriptTitle, {
-      lower: true,
-      strict: true,
-      trim: true,
-    });
-
-    const baseSlug = `${safeDoi}-${titleSlug}`;
-    let finalSlug = baseSlug;
-
-    for (let i = 1; i <= 50; i++) {
-      const exists = await prisma.submission.findFirst({
-        where: { articleSlug: finalSlug },
-        select: { id: true },
+    /* -------------------------------
+       GENERATE ARTICLE SLUG
+    -------------------------------- */
+    if (submission.manuscriptTitle && doiSlug) {
+      const safeDoi = doiSlug.replace(/\//g, "-").replace(/\./g, "-");
+      const titleSlug = slugify(submission.manuscriptTitle, {
+        lower: true,
+        strict: true,
+        trim: true,
       });
+      let finalSlug = `${safeDoi}-${titleSlug}`;
 
-      if (!exists) break;
-      finalSlug = `${baseSlug}-${i}`;
+      for (let i = 1; i <= 50; i++) {
+        const exists = await prisma.submission.findFirst({
+          where: { articleSlug: finalSlug },
+          select: { id: true },
+        });
+        if (!exists) break;
+        finalSlug = `${safeDoi}-${titleSlug}-${i}`;
+      }
+
+      data.articleSlug = finalSlug;
     }
-
-    data.articleSlug = finalSlug;
+  } catch (err) {
+    console.error("DOI / SEO Error:", err);
   }
-
   break;
 }
 
