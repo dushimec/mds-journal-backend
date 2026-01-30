@@ -52,10 +52,16 @@ model Submission {
   abstract        String?
   keywords        String?
   manuscriptType  SubmissionManuscriptType?
-  doiSlug         String?  @unique
+  doiSlug         String?       @unique
+  seoPdfName      String?
+  articleSlug     String?       @unique
+  
+  volume          Int?
+  issue           Int?
+  
+  publishedAt     DateTime?
   submittedAt     DateTime?
   reviewStartedAt DateTime?      // 🆕 Added
-  publishedAt     DateTime?      // 🆕 Added
   rejectedAt      DateTime?      // 🆕 Added
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -182,20 +188,16 @@ enum AboutSection {
 }
 
 model JournalIssue {
-  id            String   @id @default(cuid())
-  issueNumber   Int
-  year          Int
-  month         Int?
-  title         String
-  description   String?
-  isSpecial     Boolean  @default(false)
-  specialTitle  String?
-  guestEditors  String?
-  articleCount  Int      @default(0)
-  downloads     Int      @default(0)
-  publishedAt   DateTime @default(now())
-  createdAt     DateTime @default(now())
-  submissions   Submission[]
+  id          String        @id @default(cuid())
+  volume      Int
+  issue       Int
+  year        Int
+  submissions Submission[]
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  @@unique([volume, issue])
 }
 
 model EditorialBoardMember {

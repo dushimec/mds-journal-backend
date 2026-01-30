@@ -140,7 +140,10 @@ export const downloadSubmissionFiles = asyncHandler(async (req: Request, res: Re
   const user = (req as any).user;
   if (!user) return res.status(401).json({ success: false, message: "Authentication required" });
 
-  const submission = await prisma.submission.findUnique({ where: { id: submissionId }, include: { files: true } });
+  const submission = await prisma.submission.findUnique({ 
+    where: { id: submissionId },
+    include: { files: true }
+  });
   if (!submission) return res.status(404).json({ success: false, message: "Submission not found" });
 
   // Authors can only download their own submissions; editors/admins may download any
@@ -218,68 +221,118 @@ export const downloadSubmissionFiles = asyncHandler(async (req: Request, res: Re
 // GET /article/:submissionId/pdf
 export const viewArticlePdf = asyncHandler(
   async (req: Request, res: Response) => {
-    const { submissionId } = req.params;
+    const { volume, issue, slug } = req.params;
 
-    if (!submissionId) {
-      return res.status(400).json({ success: false, message: "Submission ID is required" });
+    if (!volume || !issue || !slug) {
+      return res.status(400).json({
+        success: false,
+        message: "Volume, issue, and slug are required"
+      });
     }
 
-    // Find published submission by submissionId
     const submission = await prisma.submission.findFirst({
       where: {
-        id: submissionId,
-        status: "PUBLISHED",
+        articleSlug: slug,
+        volume: parseInt(volume),
+        issue: parseInt(issue),
+        status: "PUBLISHED"
       },
       include: {
         files: {
           where: {
-            fileType: "MANUSCRIPT",
-          },
-        },
-      },
+            fileType: "MANUSCRIPT"
+          }
+        }
+      }
     });
 
     if (!submission) {
-      return res.status(404).json({ success: false, message: "Article not found or not published" });
+      return res.status(404).json({
+        success: false,
+        message: "Article not found or not published"
+      });
     }
 
     const manuscriptFile = submission.files[0];
+
     if (!manuscriptFile) {
-      return res.status(404).json({ success: false, message: "Manuscript file not available" });
+      return res.status(404).json({
+        success: false,
+        message: "Manuscript file not available"
+      });
     }
 
-    // Increment download count for viewing
+    // Increment downloads
     await prisma.fileUpload.update({
       where: { id: manuscriptFile.id },
-      data: { downloadCount: { increment: 1 } },
+      data: {
+        downloadCount: {
+          increment: 1
+        }
+      }
     });
 
-    let viewUrl = manuscriptFile.fileUrl || manuscriptFile.secureUrl;
+    // Choose best URL
+    const viewUrl =
+      manuscriptFile.secureUrl ||
+      manuscriptFile.fileUrl;
+
     if (!viewUrl) {
-      return res.status(404).json({ success: false, message: "File URL not available" });
+      return res.status(404).json({
+        success: false,
+        message: "File URL not available"
+      });
     }
 
     try {
-      // Fetch file contents from viewUrl
-      const fileResponse = await axios.get(viewUrl, { responseType: "stream", timeout: 30000 });
 
-      // Set headers for inline viewing
-      const fileName = manuscriptFile.fileName || manuscriptFile.id;
-      const safeFileName = String(fileName).replace(/"/g, '\\"');
-      res.setHeader("Content-Type", fileResponse.headers["content-type"] || "application/pdf");
+      // Fetch PDF as stream
+      const fileResponse = await axios.get(viewUrl, {
+        responseType: "stream",
+        timeout: 30000
+      });
+
+      // Safe filename
+      const fileName =
+        submission.articleSlug || manuscriptFile.fileName;
+
+      const safeFileName = `${fileName}.pdf`.replace(/"/g, "");
+
+      // Headers
+      res.setHeader(
+        "Content-Type",
+        fileResponse.headers["content-type"] || "application/pdf"
+      );
+
       res.setHeader(
         "Content-Disposition",
         `inline; filename="${safeFileName}"`
       );
+
       if (fileResponse.headers["content-length"]) {
-        res.setHeader("Content-Length", fileResponse.headers["content-length"]);
+        res.setHeader(
+          "Content-Length",
+          fileResponse.headers["content-length"]
+        );
       }
 
-      // Pipe file stream to response
+      // Disable buffering (important for Vercel)
+      res.setHeader("Cache-Control", "public, max-age=86400");
+
+      // Stream
       fileResponse.data.pipe(res);
-    } catch (err: any) {
-      console.error(`Failed to fetch file ${manuscriptFile.id} (${viewUrl}):`, err?.message || err);
-      return res.status(500).json({ success: false, message: "Failed to view file" });
+
+    } catch (error: any) {
+
+      console.error(
+        `PDF stream error (${manuscriptFile.id}):`,
+        error?.message || error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to load PDF"
+      });
     }
   }
 );

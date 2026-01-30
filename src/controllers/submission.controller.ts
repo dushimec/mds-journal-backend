@@ -9,6 +9,7 @@ import { matchedData } from "express-validator";
 import { sendSubmissionStatusEmail } from "../utils/email";
 import { assignDoiToSubmission } from "../utils/doi";
 import { uploadToR2 } from "../utils/r2Upload";
+import slugify from "slugify";
 
 export class SubmissionController {
  static create = asyncHandler(async (req: Request, res: Response) => {
@@ -174,7 +175,14 @@ export class SubmissionController {
 
     const submission = await prisma.submission.findUnique({
       where: { id },
-      include: { user: true },
+      include: {
+        user: true,
+        files: true,
+        authors: true,
+        declarations: true,
+        topic: true,
+        journalIssue: true,
+      },
     });
 
     if (!submission) throw new AppError("Submission not found", 404);
@@ -220,18 +228,135 @@ export class SubmissionController {
       case SubmissionStatus.UNDER_REVIEW:
         data.reviewStartedAt = now;
         break;
+      case SubmissionStatus.PUBLISHED: {
 
-      case SubmissionStatus.PUBLISHED:
         data.publishedAt = now;
-        // Generate and assign DOI when publishing
-        try {
-          const doiSlug = await assignDoiToSubmission(id);
-          data.doiSlug = doiSlug;
-        } catch (error) {
-          console.error("Failed to assign DOI:", error);
-          // Continue without DOI for now - could be handled manually later
+
+        /* --------------------------------
+           AUTO-GENERATE Volume / Issue and JournalIssue
+        -------------------------------- */
+        // Determine next volume/issue based on last JournalIssue
+        const lastJournalIssue = await prisma.journalIssue.findFirst({
+          orderBy: [
+            { year: "desc" },
+            { volume: "desc" },
+            { issue: "desc" }
+          ],
+        });
+
+        let volumeNum = 1;
+        let issueNum = 1;
+
+        if (lastJournalIssue) {
+          if (lastJournalIssue.year === now.getFullYear()) {
+            volumeNum = lastJournalIssue.volume;
+            issueNum = lastJournalIssue.issue + 1;
+          } else {
+            // New year → increment volume, reset issue
+            volumeNum = lastJournalIssue.volume + 1;
+            issueNum = 1;
+          }
         }
+
+        // Ensure a JournalIssue record exists for this volume/issue
+        let journalIssue = await prisma.journalIssue.findFirst({
+          where: { volume: volumeNum, issue: issueNum },
+        });
+
+        if (!journalIssue) {
+          journalIssue = await prisma.journalIssue.create({
+            data: {
+              volume: volumeNum,
+              issue: issueNum,
+              year: now.getFullYear(),
+            },
+          });
+        }
+
+        data.volume = volumeNum;
+        data.issue = issueNum;
+        data.journalIssue = { connect: { id: journalIssue.id } };
+
+        /* --------------------------------
+           1. Generate DOI + SEO Name
+        -------------------------------- */
+        let doiSlug: string | null = null;
+
+        try {
+
+          const result = await assignDoiToSubmission(id);
+
+          // If your function returns object
+          if (typeof result === "object") {
+            doiSlug = result.doiSlug;
+            data.seoPdfName = result.seoPdfName;
+            data.doiSlug = result.doiSlug;
+          }
+
+          // If it returns string (fallback)
+          if (typeof result === "string") {
+            doiSlug = result;
+            data.doiSlug = result;
+          }
+
+        } catch (err) {
+          console.error("DOI Error:", err);
+        }
+
+
+        /* --------------------------------
+           2. Generate Article Slug
+           Example:
+           10-1234-mds-2026-5-ai-healthcare
+        -------------------------------- */
+
+        if (submission.manuscriptTitle && doiSlug) {
+
+          // Convert DOI → URL safe
+          const safeDoi = doiSlug
+            .replace(/\//g, "-")
+            .replace(/\./g, "-");
+
+
+          // Slugify title
+          const titleSlug = slugify(
+            submission.manuscriptTitle,
+            {
+              lower: true,
+              strict: true,
+              trim: true
+            }
+          );
+
+
+          const baseSlug = `${safeDoi}-${titleSlug}`;
+
+          let finalSlug = baseSlug;
+
+
+          /* --------------------------------
+             3. Ensure Uniqueness (safe loop)
+          -------------------------------- */
+          for (let i = 1; i <= 50; i++) {
+
+            const exists = await prisma.submission.findFirst({
+              where: { articleSlug: finalSlug },
+              select: { id: true }
+            });
+
+            if (!exists) break;
+
+            finalSlug = `${baseSlug}-${i}`;
+          }
+
+
+          data.articleSlug = finalSlug;
+        }
+
+
         break;
+      }
+
 
       case SubmissionStatus.REJECTED:
         data.rejectedAt = now;
