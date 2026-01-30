@@ -281,133 +281,96 @@ export class SubmissionController {
         data.reviewStartedAt = now;
         break;
       case SubmissionStatus.PUBLISHED: {
+  data.publishedAt = now;
 
-        data.publishedAt = now;
+  /* --------------------------------
+     AUTO-GENERATE Volume / Issue and JournalIssue
+  -------------------------------- */
+  const lastJournalIssue = await prisma.journalIssue.findFirst({
+    orderBy: [
+      { year: "desc" },
+      { volume: "desc" },
+      { issue: "desc" }
+    ],
+  });
 
-        /* --------------------------------
-           AUTO-GENERATE Volume / Issue and JournalIssue
-        -------------------------------- */
-        // Determine next volume/issue based on last JournalIssue
-        const lastJournalIssue = await prisma.journalIssue.findFirst({
-          orderBy: [
-            { year: "desc" },
-            { volume: "desc" },
-            { issue: "desc" }
-          ],
-        });
+  let volumeNum = 1;
+  let issueNum = 1;
 
-        let volumeNum = 1;
-        let issueNum = 1;
+  if (lastJournalIssue) {
+    if (lastJournalIssue.year === now.getFullYear()) {
+      volumeNum = lastJournalIssue.volume;
+      issueNum = lastJournalIssue.issue + 1;
+    } else {
+      volumeNum = lastJournalIssue.volume + 1;
+      issueNum = 1;
+    }
+  }
 
-        if (lastJournalIssue) {
-          if (lastJournalIssue.year === now.getFullYear()) {
-            volumeNum = lastJournalIssue.volume;
-            issueNum = lastJournalIssue.issue + 1;
-          } else {
-            // New year → increment volume, reset issue
-            volumeNum = lastJournalIssue.volume + 1;
-            issueNum = 1;
-          }
-        }
+  // Ensure a JournalIssue record exists
+  let journalIssue = await prisma.journalIssue.findFirst({
+    where: { volume: volumeNum, issue: issueNum },
+  });
 
-        // Ensure a JournalIssue record exists for this volume/issue
-        let journalIssue = await prisma.journalIssue.findFirst({
-          where: { volume: volumeNum, issue: issueNum },
-        });
+  if (!journalIssue) {
+    journalIssue = await prisma.journalIssue.create({
+      data: {
+        volume: volumeNum,
+        issue: issueNum,
+        year: now.getFullYear(),
+      },
+    });
+  }
 
-        if (!journalIssue) {
-          journalIssue = await prisma.journalIssue.create({
-            data: {
-              volume: volumeNum,
-              issue: issueNum,
-              year: now.getFullYear(),
-            },
-          });
-        }
+  data.volume = volumeNum;
+  data.issue = issueNum;
+  data.journalIssue = { connect: { id: journalIssue.id } };
 
-        data.volume = volumeNum;
-        data.issue = issueNum;
-        data.journalIssue = { connect: { id: journalIssue.id } };
+  /* --------------------------------
+     1. Generate DOI + SEO Name ONLY IF MISSING
+  -------------------------------- */
+  if (!submission.doiSlug) {
+    try {
+      const result = await assignDoiToSubmission(id);
+      data.seoPdfName = result.seoPdfName;
+      data.doiSlug = result.doiSlug;
+    } catch (err) {
+      console.error("DOI Error:", err);
+    }
+  }
 
-        /* --------------------------------
-           1. Generate DOI + SEO Name
-        -------------------------------- */
-        let doiSlug: string | null = null;
+  /* --------------------------------
+     2. Generate Article Slug (still optional)
+  -------------------------------- */
+  if (submission.manuscriptTitle && (data.doiSlug || submission.doiSlug)) {
+    const safeDoi = (data.doiSlug || submission.doiSlug!)
+      .replace(/\//g, "-")
+      .replace(/\./g, "-");
 
-        try {
+    const titleSlug = slugify(submission.manuscriptTitle, {
+      lower: true,
+      strict: true,
+      trim: true,
+    });
 
-          const result = await assignDoiToSubmission(id);
+    const baseSlug = `${safeDoi}-${titleSlug}`;
+    let finalSlug = baseSlug;
 
-          // If your function returns object
-          if (typeof result === "object") {
-            doiSlug = result.doiSlug;
-            data.seoPdfName = result.seoPdfName;
-            data.doiSlug = result.doiSlug;
-          }
+    for (let i = 1; i <= 50; i++) {
+      const exists = await prisma.submission.findFirst({
+        where: { articleSlug: finalSlug },
+        select: { id: true },
+      });
 
-          // If it returns string (fallback)
-          if (typeof result === "string") {
-            doiSlug = result;
-            data.doiSlug = result;
-          }
+      if (!exists) break;
+      finalSlug = `${baseSlug}-${i}`;
+    }
 
-        } catch (err) {
-          console.error("DOI Error:", err);
-        }
+    data.articleSlug = finalSlug;
+  }
 
-
-        /* --------------------------------
-           2. Generate Article Slug
-           Example:
-           10-1234-mds-2026-5-ai-healthcare
-        -------------------------------- */
-
-        if (submission.manuscriptTitle && doiSlug) {
-
-          // Convert DOI → URL safe
-          const safeDoi = doiSlug
-            .replace(/\//g, "-")
-            .replace(/\./g, "-");
-
-
-          // Slugify title
-          const titleSlug = slugify(
-            submission.manuscriptTitle,
-            {
-              lower: true,
-              strict: true,
-              trim: true
-            }
-          );
-
-
-          const baseSlug = `${safeDoi}-${titleSlug}`;
-
-          let finalSlug = baseSlug;
-
-
-          /* --------------------------------
-             3. Ensure Uniqueness (safe loop)
-          -------------------------------- */
-          for (let i = 1; i <= 50; i++) {
-
-            const exists = await prisma.submission.findFirst({
-              where: { articleSlug: finalSlug },
-              select: { id: true }
-            });
-
-            if (!exists) break;
-
-            finalSlug = `${baseSlug}-${i}`;
-          }
-
-
-          data.articleSlug = finalSlug;
-        }
-
-
-        break;
-      }
+  break;
+}
 
 
       case SubmissionStatus.REJECTED:
