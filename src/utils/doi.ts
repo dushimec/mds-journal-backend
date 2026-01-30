@@ -4,8 +4,8 @@ import slugify from "slugify";
 /**
  * DOI CONFIG
  */
-const DOI_PREFIX = "10.1234"; // Replace later
-const JOURNAL_CODE = "mds";
+const DOI_PREFIX = "10.9999"; // Replace later
+const JOURNAL_CODE = "jaepd";
 
 
 /* =====================================
