@@ -80,52 +80,35 @@ export class SubmissionController {
 
     try {
       const submission = await prisma.submission.create({
-        data: {
-          manuscriptTitle: data.manuscriptTitle,
-          abstract: data.abstract,
-          keywords: data.keywords,
-          status: SubmissionStatus.SUBMITTED,
-          submittedAt: new Date(),
-
-          user: {
-            connect: { id: req.user.userId },
-          },
-
-          topic: {
-            connect: { id: topicRecord.id },
-          },
-
-          authors: {
-            create: authors.map((a: any) => ({
-              fullName: a.fullName,
-              email: a.email,
-              affiliation: a.affiliation,
-              isCorresponding: a.isCorresponding ?? false,
-              order: a.order ?? 0,
-            })),
-          },
-
-          files: {
-            create: uploadedFiles,
-          },
-
-          // Declarations
-          declarations: {
-            create: declarations.map((d: any) => ({
-              type: d.type,
-              isChecked: d.isChecked,
-              text: d.text,
-            })),
-          },
-        },
-
-        include: {
-          authors: true,
-          files: true,
-          declarations: true,
-          topic: true,
-        },
-      });
+  data: {
+    manuscriptTitle: data.manuscriptTitle,
+    abstract: data.abstract,
+    keywords: data.keywords,
+    status: SubmissionStatus.SUBMITTED,
+    submittedAt: new Date(),
+    user: { connect: { id: req.user.userId } },
+    topic: { connect: { id: topicRecord.id } },
+    authors: { create: authors.map(a => ({
+      fullName: a.fullName,
+      email: a.email,
+      affiliation: a.affiliation,
+      isCorresponding: a.isCorresponding ?? false,
+      order: a.order ?? 0
+    }))},
+    files: { create: uploadedFiles },
+    declarations: { create: declarations.map(d => ({
+      type: d.type,
+      isChecked: d.isChecked,
+      text: d.text
+    }))},
+  },
+  include: {
+    authors: true,
+    files: true,
+    declarations: true,
+    topic: true,
+  },
+});
 
       res.status(201).json({
         success: true,
