@@ -4,20 +4,15 @@ import slugify from "slugify";
 /**
  * DOI CONFIG
  */
-const DOI_PREFIX = "10.9999"; // Replace with your actual DOI prefix
+const DOI_PREFIX = "10.9999"; // Replace with your DOI prefix
 const JOURNAL_CODE = "jaepd";
 
 /* =====================================
    Build SEO PDF Filename
 ===================================== */
-function buildSeoPdfName(doi: string, title?: string): string {
-  // Convert DOI to URL-safe
+export function buildSeoPdfName(doi: string, title: string = "article"): string {
   const safeDoi = doi.replace(/\//g, "-").replace(/\./g, "-");
-
-  const safeTitle = title
-    ? slugify(title, { lower: true, strict: true, trim: true })
-    : "article";
-
+  const safeTitle = slugify(title, { lower: true, strict: true, trim: true });
   return `${safeDoi}-${safeTitle}.pdf`;
 }
 
@@ -26,7 +21,6 @@ function buildSeoPdfName(doi: string, title?: string): string {
 ===================================== */
 export async function generateDoiSlug(submissionId: string): Promise<{ doiSlug: string; seoPdfName: string }> {
   return await prisma.$transaction(async (tx) => {
-    // 1. Load submission
     const submission = await tx.submission.findUnique({
       where: { id: submissionId },
       select: {
@@ -39,10 +33,8 @@ export async function generateDoiSlug(submissionId: string): Promise<{ doiSlug: 
 
     if (!submission) throw new Error("Submission not found");
 
-    // 2. Determine year
     const year = submission.publishedAt?.getFullYear() || submission.journalIssue?.year || new Date().getFullYear();
 
-    // 3. Find last DOI in the same year
     const lastDoi = await tx.submission.findFirst({
       where: {
         status: "PUBLISHED",
@@ -52,7 +44,6 @@ export async function generateDoiSlug(submissionId: string): Promise<{ doiSlug: 
       select: { doiSlug: true },
     });
 
-    // 4. Determine next number
     let nextNumber = 1;
     if (lastDoi?.doiSlug) {
       const parts = lastDoi.doiSlug.split(".");
@@ -60,15 +51,12 @@ export async function generateDoiSlug(submissionId: string): Promise<{ doiSlug: 
       if (!isNaN(lastNum)) nextNumber = lastNum + 1;
     }
 
-    // 5. Build DOI
     const doiSlug = `${DOI_PREFIX}/${JOURNAL_CODE}.${year}.${nextNumber}`;
 
-    // 6. Check collision
     const exists = await tx.submission.findFirst({ where: { doiSlug } });
     if (exists) throw new Error("DOI collision detected");
 
-    // 7. Build SEO filename
-    const seoPdfName = buildSeoPdfName(submission.manuscriptTitle ?? undefined, submission.manuscriptTitle);
+    const seoPdfName = buildSeoPdfName(doiSlug, submission.manuscriptTitle ?? "article");
 
     return { doiSlug, seoPdfName };
   });
@@ -103,10 +91,7 @@ export async function generateArticleSlug(submissionId: string): Promise<string>
   if (!submission.manuscriptTitle || !submission.doiSlug)
     throw new Error("Submission must have DOI and title to generate articleSlug");
 
-  // Convert DOI → URL safe
   const safeDoi = submission.doiSlug.replace(/\//g, "-").replace(/\./g, "-");
-
-  // Slugify title
   const titleSlug = slugify(submission.manuscriptTitle, { lower: true, strict: true, trim: true });
 
   let baseSlug = `${safeDoi}-${titleSlug}`;
@@ -121,6 +106,12 @@ export async function generateArticleSlug(submissionId: string): Promise<string>
     if (!exists) break;
     finalSlug = `${baseSlug}-${i}`;
   }
+
+  // Update submission with articleSlug
+  await prisma.submission.update({
+    where: { id: submissionId },
+    data: { articleSlug: finalSlug },
+  });
 
   return finalSlug;
 }
