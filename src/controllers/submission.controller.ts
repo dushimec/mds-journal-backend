@@ -13,63 +13,132 @@ import slugify from "slugify";
 
 export class SubmissionController {
  static create = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) throw new AppError("User not authenticated", 401);
+    if (!req.user) throw new AppError("User not authenticated", 401);
 
-  const data = req.body;
-  const files = (req.files as Express.Multer.File[]) || [];
+    const data = req.body;
+    const files = (req.files as Express.Multer.File[]) || [];
 
-  if (!files.length) {
-    throw new AppError("PDF manuscript is required", 400);
-  }
-
-  const uploadedFiles = [];
-
-  try {
-    for (const file of files) {
-      const key = `submissions/temp/${file.originalname}`;
-
-      const publicUrl = await uploadToR2({
-        buffer: file.buffer,
-        key,
-        contentType: file.mimetype
-      });
-
-      uploadedFiles.push({
-        fileName: file.originalname,
-        fileUrl: publicUrl,
-        mimeType: file.mimetype,
-        fileSize: file.size,
-        fileType: FileType.MANUSCRIPT,
-        publicId: key,
-      });
+    if (!files.length) {
+      throw new AppError("PDF manuscript is required", 400);
     }
-  } catch (error: any) {
-    console.error("R2 Upload Error:", error);
-    throw new AppError(`File upload failed: ${error?.message || "Unknown error"}`, 500);
-  }
 
-  try {
-    const submission = await prisma.submission.create({
-      data: {
-        manuscriptTitle: data.manuscriptTitle,
-        abstract: data.abstract,
-        keywords: data.keywords,
-        status: SubmissionStatus.SUBMITTED,
-        user: { connect: { id: req.user.userId } },
-        files: { create: uploadedFiles },
+    let authors: any[] = [];
+    let declarations: any[] = [];
+
+    try {
+      authors = data.authors ? JSON.parse(data.authors) : [];
+      declarations = data.declarations ? JSON.parse(data.declarations) : [];
+    } catch (err) {
+      throw new AppError("Invalid authors or declarations format", 400);
+    }
+
+    if (!authors.length) {
+      throw new AppError("At least one author is required", 400);
+    }
+
+    if (!data.topic) {
+      throw new AppError("Topic is required", 400);
+    }
+
+    const topicRecord = await prisma.topic.findFirst({
+      where: {
+        name: {
+          equals: data.topic,
+        },
       },
-      include: { files: true },
     });
 
-    res.status(201).json({
-      success: true,
-      data: submission,
-    });
-  } catch (error: any) {
-    console.error("Database Error:", error);
-    throw new AppError(`Failed to create submission: ${error?.message || "Unknown error"}`, 500);
-  }
-});
+    if (!topicRecord) {
+      throw new AppError("Selected topic does not exist", 400);
+    }
+
+    const uploadedFiles = [];
+
+    try {
+      for (const file of files) {
+        const key = `submissions/temp/${Date.now()}-${file.originalname}`;
+
+        const publicUrl = await uploadToR2({
+          buffer: file.buffer,
+          key,
+          contentType: file.mimetype,
+        });
+
+        uploadedFiles.push({
+          fileName: file.originalname,
+          fileUrl: publicUrl,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          fileType: FileType.MANUSCRIPT,
+          publicId: key,
+        });
+      }
+    } catch (error: any) {
+      console.error("R2 Upload Error:", error);
+      throw new AppError("File upload failed", 500);
+    }
+
+    try {
+      const submission = await prisma.submission.create({
+        data: {
+          manuscriptTitle: data.manuscriptTitle,
+          abstract: data.abstract,
+          keywords: data.keywords,
+          status: SubmissionStatus.SUBMITTED,
+          submittedAt: new Date(),
+
+          user: {
+            connect: { id: req.user.userId },
+          },
+
+          topic: {
+            connect: { id: topicRecord.id },
+          },
+
+          authors: {
+            create: authors.map((a: any) => ({
+              fullName: a.fullName,
+              email: a.email,
+              affiliation: a.affiliation,
+              isCorresponding: a.isCorresponding ?? false,
+              order: a.order ?? 0,
+            })),
+          },
+
+          files: {
+            create: uploadedFiles,
+          },
+
+          // Declarations
+          declarations: {
+            create: declarations.map((d: any) => ({
+              type: d.type,
+              isChecked: d.isChecked,
+              text: d.text,
+            })),
+          },
+        },
+
+        include: {
+          authors: true,
+          files: true,
+          declarations: true,
+          topic: true,
+        },
+      });
+
+      res.status(201).json({
+        success: true,
+        data: submission,
+      });
+    } catch (error: any) {
+      console.error("Database Error:", error);
+      throw new AppError(
+        `Failed to create submission: ${error?.message || "Unknown error"}`,
+        500
+      );
+    }
+  });
 
   static getAll = asyncHandler(async (req: Request, res: Response) => {
     const { skip, take, page } = getPagination(req);
