@@ -4,7 +4,7 @@ import { viewArticlePdf, downloadArticlePdf, viewArticlePdfByPath, getArticlePdf
 const router = Router();
 
 // GET /article/mds/:submissionId/pdf - View PDF inline in browser
-router.get("/mds/:submissionId/pdf", viewArticlePdf);
+router.get("/:volume/:issue/:slug.pdf", viewArticlePdf);
 
 // GET /article/article-pdf/:doiSlug/url - Get PDF URL
 router.get(/^\/article-pdf\/(.+)\/url$/, getArticlePdfUrl);
