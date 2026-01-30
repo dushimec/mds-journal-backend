@@ -7,7 +7,7 @@ import { ParamsDictionary } from "express-serve-static-core";
 import { ParsedQs } from "qs";
 import { matchedData } from "express-validator";
 import { sendSubmissionStatusEmail } from "../utils/email";
-import { assignDoiToSubmission } from "../utils/doi";
+import { assignDoiToSubmission, generateArticleSlug} from "../utils/doi";
 import { uploadToR2 } from "../utils/r2Upload";
 import slugify from "slugify";
 
@@ -222,180 +222,190 @@ export class SubmissionController {
   });
 
   static updateStatus = asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { status } = matchedData(req) as { status: SubmissionStatus };
+  const { id } = req.params;
+  const { status } = matchedData(req) as { status: SubmissionStatus };
 
-    const submission = await prisma.submission.findUnique({
-      where: { id },
-      include: {
-        user: true,
-        files: true,
-        authors: true,
-        declarations: true,
-        topic: true,
-        journalIssue: true,
-      },
-    });
-
-    if (!submission) throw new AppError("Submission not found", 404);
-
-    const role = req.user?.role;
-    const userId = req.user?.userId;
-
-    switch (role) {
-      case UserRole.AUTHOR:
-        if (submission.userId !== userId)
-          throw new AppError("Access denied: not your submission", 403);
-
-        const allowedForAuthor: SubmissionStatus[] = [
-          SubmissionStatus.DRAFT,
-          SubmissionStatus.SUBMITTED,
-        ];
-
-        if (!allowedForAuthor.includes(status)) {
-          throw new AppError(
-            "Authors can only change status to DRAFT or SUBMITTED",
-            400
-          );
-        }
-        break;
-
-      case UserRole.EDITOR:
-      case UserRole.REVIEWER:
-      case UserRole.ADMIN:
-        break;
-
-      default:
-        throw new AppError("Not authorized to change submission status", 403);
-    }
-
-    const now = new Date();
-    const data: Record<string, any> = { status, updatedAt: now };
-
-    switch (status) {
-      case SubmissionStatus.SUBMITTED:
-        data.submittedAt = now;
-        break;
-
-      case SubmissionStatus.UNDER_REVIEW:
-        data.reviewStartedAt = now;
-        break;
-     
-     case SubmissionStatus.PUBLISHED: {
-  data.publishedAt = now;
-
-  /* --------------------------------
-     AUTO-GENERATE Volume / Issue and JournalIssue
-  -------------------------------- */
-  const lastJournalIssue = await prisma.journalIssue.findFirst({
-    orderBy: [
-      { year: "desc" },
-      { volume: "desc" },
-      { issue: "desc" }
-    ],
+  const submission = await prisma.submission.findUnique({
+    where: { id },
+    include: {
+      user: true,
+      files: true,
+      authors: true,
+      declarations: true,
+      topic: true,
+      journalIssue: true,
+    },
   });
 
-  let volumeNum = 1;
-  let issueNum = 1;
+  if (!submission) throw new AppError("Submission not found", 404);
 
-  if (lastJournalIssue) {
-    if (lastJournalIssue.year === now.getFullYear()) {
-      volumeNum = lastJournalIssue.volume;
-      issueNum = lastJournalIssue.issue + 1;
-    } else {
-      volumeNum = lastJournalIssue.volume + 1;
-      issueNum = 1;
-    }
-  }
+  const role = req.user?.role;
+  const userId = req.user?.userId;
 
-  let journalIssue = await prisma.journalIssue.findFirst({
-    where: { volume: volumeNum, issue: issueNum },
-  });
+  // Authorization check
+  switch (role) {
+    case UserRole.AUTHOR:
+      if (submission.userId !== userId)
+        throw new AppError("Access denied: not your submission", 403);
 
-  if (!journalIssue) {
-    journalIssue = await prisma.journalIssue.create({
-      data: { volume: volumeNum, issue: issueNum, year: now.getFullYear() },
-    });
-  }
+      const allowedForAuthor: SubmissionStatus[] = [
+        SubmissionStatus.DRAFT,
+        SubmissionStatus.SUBMITTED,
+      ];
 
-  data.volume = volumeNum;
-  data.issue = issueNum;
-  data.journalIssue = { connect: { id: journalIssue.id } };
-
-  /* --------------------------------
-     ASSIGN DOI + SEO NAME
-  -------------------------------- */
-  try {
-    const { doiSlug, seoPdfName } = await assignDoiToSubmission(id);
-    data.doiSlug = doiSlug;
-    data.seoPdfName = seoPdfName;
-
-    // Generate Article Slug after DOI is assigned
-    const articleSlug = await generateArticleSlug(id);
-    data.articleSlug = articleSlug;
-  } catch (err) {
-    console.error("DOI / ArticleSlug Error:", err);
-  }
-
-  break;
-}
-
-
-      case SubmissionStatus.REJECTED:
-        data.rejectedAt = now;
-        break;
-    }
-
-    const updated = await prisma.submission.update({
-      where: { id },
-      data,
-      include: {
-        authors: true,
-        files: true,
-        declarations: true,
-        topic: true,
-        user: { select: { firstName: true, lastName: true, email: true } },
-      },
-    });
-
-    await prisma.activityLog.create({
-      data: {
-        action: "UPDATE_SUBMISSION_STATUS",
-        details: {
-          submissionId: id,
-          oldStatus: submission.status,
-          newStatus: status,
-        },
-        userId: userId!,
-        timestamp: now,
-      },
-    });
-
-    try {
-      const email = updated.user?.email;
-      if (email) {
-        const frontend = process.env.FRONTEND_URL || process.env.APP_URL || "";
-        const submissionLink = `${frontend}/submissions/${updated.id}`;
-        const manuscriptTitle =
-          updated.manuscriptTitle ?? "Untitled submission";
-        await sendSubmissionStatusEmail(
-          email,
-          status,
-          manuscriptTitle,
-          updated.id,
-          submissionLink
+      if (!allowedForAuthor.includes(status)) {
+        throw new AppError(
+          "Authors can only change status to DRAFT or SUBMITTED",
+          400
         );
       }
-    } catch (err) {
-      console.error("Failed to send submission status email:", err);
+      break;
+
+    case UserRole.EDITOR:
+    case UserRole.REVIEWER:
+    case UserRole.ADMIN:
+      break;
+
+    default:
+      throw new AppError("Not authorized to change submission status", 403);
+  }
+
+  const now = new Date();
+  const data: Record<string, any> = { status, updatedAt: now };
+
+  switch (status) {
+    case SubmissionStatus.SUBMITTED:
+      data.submittedAt = now;
+      break;
+
+    case SubmissionStatus.UNDER_REVIEW:
+      data.reviewStartedAt = now;
+      break;
+
+    case SubmissionStatus.PUBLISHED: {
+      data.publishedAt = now;
+
+      // -------------------------------
+      // AUTO-GENERATE Volume / Issue and JournalIssue
+      // -------------------------------
+      const lastJournalIssue = await prisma.journalIssue.findFirst({
+        orderBy: [
+          { year: "desc" },
+          { volume: "desc" },
+          { issue: "desc" }
+        ],
+      });
+
+      let volumeNum = 1;
+      let issueNum = 1;
+
+      if (lastJournalIssue) {
+        if (lastJournalIssue.year === now.getFullYear()) {
+          volumeNum = lastJournalIssue.volume;
+          issueNum = lastJournalIssue.issue + 1;
+        } else {
+          volumeNum = lastJournalIssue.volume + 1;
+          issueNum = 1;
+        }
+      }
+
+      let journalIssue = await prisma.journalIssue.findFirst({
+        where: { volume: volumeNum, issue: issueNum },
+      });
+
+      if (!journalIssue) {
+        journalIssue = await prisma.journalIssue.create({
+          data: { volume: volumeNum, issue: issueNum, year: now.getFullYear() },
+        });
+      }
+
+      data.volume = volumeNum;
+      data.issue = issueNum;
+      data.journalIssue = { connect: { id: journalIssue.id } };
+
+      // -------------------------------
+      // ASSIGN DOI + SEO NAME
+      // -------------------------------
+      try {
+        const { doiSlug, seoPdfName } = await assignDoiToSubmission(id);
+        data.doiSlug = doiSlug;
+        data.seoPdfName = seoPdfName;
+
+        // Generate Article Slug after DOI is assigned
+        const articleSlug = await generateArticleSlug(id);
+        data.articleSlug = articleSlug;
+      } catch (err) {
+        console.error("DOI / ArticleSlug Error:", err);
+      }
+
+      break;
     }
 
-    return res.status(200).json({
-      success: true,
-      message: `Submission status updated to ${status}`,
-      data: updated,
-    });
+    case SubmissionStatus.REJECTED:
+      data.rejectedAt = now;
+      break;
+  }
+
+  // -------------------------------
+  // UPDATE SUBMISSION
+  // -------------------------------
+  const updated = await prisma.submission.update({
+    where: { id },
+    data,
+    include: {
+      authors: true,
+      files: true,
+      declarations: true,
+      topic: true,
+      user: { select: { firstName: true, lastName: true, email: true } },
+    },
   });
+
+  // -------------------------------
+  // LOG ACTIVITY
+  // -------------------------------
+  await prisma.activityLog.create({
+    data: {
+      action: "UPDATE_SUBMISSION_STATUS",
+      details: {
+        submissionId: id,
+        oldStatus: submission.status,
+        newStatus: status,
+      },
+      userId: userId!,
+      timestamp: now,
+    },
+  });
+
+  // -------------------------------
+  // SEND EMAIL
+  // -------------------------------
+  try {
+    const email = updated.user?.email;
+    if (email) {
+      const frontend = process.env.FRONTEND_URL || process.env.APP_URL || "";
+      const submissionLink = `${frontend}/submissions/${updated.id}`;
+      const manuscriptTitle = updated.manuscriptTitle ?? "Untitled submission";
+
+      await sendSubmissionStatusEmail(
+        email,
+        status,
+        manuscriptTitle,
+        updated.id,
+        submissionLink
+      );
+    }
+  } catch (err) {
+    console.error("Failed to send submission status email:", err);
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: `Submission status updated to ${status}`,
+    data: updated,
+  });
+});
+
 
   static delete = asyncHandler(async (req: Request, res: Response) => {
     const { id } = matchedData(req);
