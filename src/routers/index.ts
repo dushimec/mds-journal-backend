@@ -43,7 +43,7 @@ route.use("/logo", logoRoute);
 route.use("/announcements", announcementRoute);
 
 route.use("/search", searchRoutes);
-route.use("/article", articleRoutes);
+route.use("/", articleRoutes);
 route.use("/users-crud", generateCrudRoutes("User"));
 route.use("/submissions-crud", generateCrudRoutes("Submission"));
 route.use("/topics-crud", generateCrudRoutes("Topic"));
