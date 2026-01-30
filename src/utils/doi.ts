@@ -7,7 +7,6 @@ import slugify from "slugify";
 const DOI_PREFIX = "10.9999"; // Replace later
 const JOURNAL_CODE = "jaepd";
 
-
 /* =====================================
    Build SEO PDF Filename
 ===================================== */
@@ -15,7 +14,6 @@ function buildSeoPdfName(
   doi: string,
   title?: string
 ): string {
-
   // 10.1234/mds.2026.15 → 10-1234-mds-2026-15
   const safeDoi = doi
     .replace(/\//g, "-")
@@ -31,7 +29,6 @@ function buildSeoPdfName(
 
   return `${safeDoi}-${safeTitle}.pdf`;
 }
-
 
 /* =====================================
    Generate DOI
@@ -64,7 +61,6 @@ export async function generateDoiSlug(
       throw new Error("Submission not found");
     }
 
-
     /* -------------------------------
        2. Resolve year
     -------------------------------- */
@@ -73,69 +69,35 @@ export async function generateDoiSlug(
       submission.journalIssue?.year ||
       new Date().getFullYear();
 
-
     /* -------------------------------
-       3. Find last DOI
-    -------------------------------- */
-    const lastDoi = await tx.submission.findFirst({
-      where: {
-        status: "PUBLISHED",
-        doiSlug: {
-          startsWith: `${DOI_PREFIX}/${JOURNAL_CODE}.${year}.`
-        }
-      },
-      orderBy: {
-        createdAt: "desc"
-      },
-      select: {
-        doiSlug: true
-      }
-    });
-
-
-    /* -------------------------------
-       4. Next number
+       3. Find next available DOI number with collision handling
     -------------------------------- */
     let nextNumber = 1;
+    let doiSlug = "";
 
-    if (lastDoi?.doiSlug) {
+    for (let i = 0; i < 50; i++) { // try 50 times max
+      doiSlug = `${DOI_PREFIX}/${JOURNAL_CODE}.${year}.${nextNumber}`;
 
-      const parts = lastDoi.doiSlug.split(".");
-      const lastNum = Number(parts.at(-1));
+      // Only check other submissions, ignore current one
+      const exists = await tx.submission.findFirst({
+        where: { doiSlug, id: { not: submissionId } }
+      });
 
-      if (!isNaN(lastNum)) {
-        nextNumber = lastNum + 1;
-      }
+      if (!exists) break; // No collision, safe to use
+      nextNumber++;
     }
 
+    if (!doiSlug) {
+      throw new Error("Unable to generate unique DOI after 50 attempts");
+    }
 
     /* -------------------------------
-       5. Build DOI
-    -------------------------------- */
-    const doiSlug =
-      `${DOI_PREFIX}/${JOURNAL_CODE}.${year}.${nextNumber}`;
-
-
-    /* -------------------------------
-       6. Build SEO filename
+       4. Build SEO PDF filename
     -------------------------------- */
     const seoPdfName = buildSeoPdfName(
       doiSlug,
       submission.manuscriptTitle ?? undefined
     );
-
-
-    /* -------------------------------
-       7. Collision check
-    -------------------------------- */
-    const exists = await tx.submission.findFirst({
-      where: { doiSlug }
-    });
-
-    if (exists) {
-      throw new Error("DOI collision detected");
-    }
-
 
     return {
       doiSlug,
@@ -144,9 +106,8 @@ export async function generateDoiSlug(
   });
 }
 
-
 /* =====================================
-   Assign DOI + SEO name
+   Assign DOI + SEO name to a submission
 ===================================== */
 export async function assignDoiToSubmission(
   submissionId: string
@@ -156,10 +117,7 @@ export async function assignDoiToSubmission(
 }> {
 
   return await prisma.$transaction(async (tx) => {
-
-    const { doiSlug, seoPdfName } =
-      await generateDoiSlug(submissionId);
-
+    const { doiSlug, seoPdfName } = await generateDoiSlug(submissionId);
 
     await tx.submission.update({
       where: { id: submissionId },
@@ -169,10 +127,52 @@ export async function assignDoiToSubmission(
       }
     });
 
-    return {
-      doiSlug,
-      seoPdfName
-    };
+    return { doiSlug, seoPdfName };
   });
 }
 
+/* =====================================
+   Generate Article Slug
+   Example: 10-9999-jaepd-2026-5-my-article-title
+===================================== */
+export async function generateArticleSlug(
+  submissionId: string
+): Promise<string> {
+
+  return await prisma.$transaction(async (tx) => {
+    const submission = await tx.submission.findUnique({
+      where: { id: submissionId },
+      select: { manuscriptTitle: true, doiSlug: true }
+    });
+
+    if (!submission) throw new Error("Submission not found");
+    if (!submission.doiSlug) throw new Error("DOI must be assigned first");
+
+    const safeDoi = submission.doiSlug.replace(/\//g, "-").replace(/\./g, "-");
+
+    const titleSlug = submission.manuscriptTitle
+      ? slugify(submission.manuscriptTitle, { lower: true, strict: true, trim: true })
+      : "article";
+
+    let baseSlug = `${safeDoi}-${titleSlug}`;
+    let finalSlug = baseSlug;
+
+    // Ensure uniqueness
+    for (let i = 1; i <= 50; i++) {
+      const exists = await tx.submission.findFirst({
+        where: { articleSlug: finalSlug, id: { not: submissionId } },
+        select: { id: true }
+      });
+      if (!exists) break;
+      finalSlug = `${baseSlug}-${i}`;
+    }
+
+    // Save to submission
+    await tx.submission.update({
+      where: { id: submissionId },
+      data: { articleSlug: finalSlug }
+    });
+
+    return finalSlug;
+  });
+}
