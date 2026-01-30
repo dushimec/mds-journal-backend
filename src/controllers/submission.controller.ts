@@ -282,10 +282,9 @@ export class SubmissionController {
         break;
      
      case SubmissionStatus.PUBLISHED: {
-  const now = new Date();
   data.publishedAt = now;
 
-  /* -------------------------------
+  /* --------------------------------
      AUTO-GENERATE Volume / Issue and JournalIssue
   -------------------------------- */
   const lastJournalIssue = await prisma.journalIssue.findFirst({
@@ -315,11 +314,7 @@ export class SubmissionController {
 
   if (!journalIssue) {
     journalIssue = await prisma.journalIssue.create({
-      data: {
-        volume: volumeNum,
-        issue: issueNum,
-        year: now.getFullYear(),
-      },
+      data: { volume: volumeNum, issue: issueNum, year: now.getFullYear() },
     });
   }
 
@@ -327,41 +322,21 @@ export class SubmissionController {
   data.issue = issueNum;
   data.journalIssue = { connect: { id: journalIssue.id } };
 
-  /* -------------------------------
-     ASSIGN DOI + SEO
+  /* --------------------------------
+     ASSIGN DOI + SEO NAME
   -------------------------------- */
   try {
     const { doiSlug, seoPdfName } = await assignDoiToSubmission(id);
-
     data.doiSlug = doiSlug;
     data.seoPdfName = seoPdfName;
 
-    /* -------------------------------
-       GENERATE ARTICLE SLUG
-    -------------------------------- */
-    if (submission.manuscriptTitle && doiSlug) {
-      const safeDoi = doiSlug.replace(/\//g, "-").replace(/\./g, "-");
-      const titleSlug = slugify(submission.manuscriptTitle, {
-        lower: true,
-        strict: true,
-        trim: true,
-      });
-      let finalSlug = `${safeDoi}-${titleSlug}`;
-
-      for (let i = 1; i <= 50; i++) {
-        const exists = await prisma.submission.findFirst({
-          where: { articleSlug: finalSlug },
-          select: { id: true },
-        });
-        if (!exists) break;
-        finalSlug = `${safeDoi}-${titleSlug}-${i}`;
-      }
-
-      data.articleSlug = finalSlug;
-    }
+    // Generate Article Slug after DOI is assigned
+    const articleSlug = await generateArticleSlug(id);
+    data.articleSlug = articleSlug;
   } catch (err) {
-    console.error("DOI / SEO Error:", err);
+    console.error("DOI / ArticleSlug Error:", err);
   }
+
   break;
 }
 
