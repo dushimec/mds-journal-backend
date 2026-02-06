@@ -71,7 +71,11 @@ router.get(
   SubmissionController.stats
 );
 
-
+// NEW: Get article by volume/issue/slug (for SEO landing pages)
+router.get(
+  "/vol/:volume/issue/:issue/:slug",
+  SubmissionController.getByVolumeIssueSlug
+);
 // Generic fetch by id (placed after more specific routes to avoid route conflicts)
 router.get(
   "/:id",

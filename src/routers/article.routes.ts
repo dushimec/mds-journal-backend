@@ -1,15 +1,32 @@
 import { Router } from "express";
-import { viewArticlePdf, downloadArticlePdf, viewArticlePdfByPath, getArticlePdfUrl } from "../controllers/streamFile.controller";
+import { 
+  viewArticlePdf, 
+  viewArticlePdfByPath, 
+  getArticlePdfUrl,
+  streamArticlePdf 
+} from "../controllers/streamFile.controller";
+import {
+  getArticleBibtex,
+  getArticleRis,
+  getArticleCitation,
+  getArticleReferences
+} from "../controllers/citation.controller";
 
 const router = Router();
 
-// GET /article/mds/:submissionId/pdf - View PDF inline in browser
-router.get("/vol:volume/issue:issue/:slug.pdf", viewArticlePdf);
+// PDF Routes - SEO-optimized streaming
+router.get("/vol:volume/issue:issue/:slug.pdf", streamArticlePdf);
 
-// GET /article/article-pdf/:doiSlug/url - Get PDF URL
-router.get(/^\/article-pdf\/(.+)\/url$/, getArticlePdfUrl);
+// Citation Routes
+router.get("/vol:volume/issue:issue/:slug/citation", getArticleCitation);
+router.get("/vol:volume/issue:issue/:slug/citation/bibtex", getArticleBibtex);
+router.get("/vol:volume/issue:issue/:slug/citation/ris", getArticleRis);
 
-// GET /article/:doi/download - Download PDF
-router.get(/^\/(.+)\/download$/, downloadArticlePdf);
+// References Route
+router.get("/vol:volume/issue:issue/:slug/references", getArticleReferences);
+
+// Legacy routes
+router.get("/article-pdf/:doiSlug/url", getArticlePdfUrl);
+
 
 export default router;
