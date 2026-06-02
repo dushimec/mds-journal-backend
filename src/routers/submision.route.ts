@@ -16,6 +16,27 @@ import { body, param, query } from "express-validator";
 
 const router = Router();
 
+// Middleware to parse JSON strings for form-data submissions
+const parseFormDataFields = (req: Request, res: Response, next: NextFunction) => {
+  if (req.body.authors && typeof req.body.authors === "string") {
+    try {
+      req.body.authors = JSON.parse(req.body.authors);
+    } catch (e) {
+      // Leave as string, validation will catch the error
+    }
+  }
+
+  if (req.body.declarations && typeof req.body.declarations === "string") {
+    try {
+      req.body.declarations = JSON.parse(req.body.declarations);
+    } catch (e) {
+      // Leave as string, validation will catch the error
+    }
+  }
+
+  next();
+};
+
 router.get(
   "/",
   getAllSubmissionsValidation,
@@ -38,9 +59,10 @@ router.post(
   "/",
   authenticate,
   authorizeRoles(UserRole.AUTHOR),
+  multipleUpload("files"),
+  parseFormDataFields,
   createSubmissionValidation,
   validate,
-   multipleUpload("files"),
   SubmissionController.create
 );
 

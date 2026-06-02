@@ -20,6 +20,9 @@ import logoRoute from "./logo.route"
 import announcementRoute from "./announcement.routes"
 import searchRoutes from "./search.routes";
 import articleRoutes from "./article.routes";
+import authorRoutes from "./author.routes";
+import authorContentRoutes from "./authorContent.routes";
+import authorPageRoutes from "./authorPage.routes";
 import { generateCrudRoutes } from "../utils/generateCrudRoutes";
 
 route.use(requestLogger);
@@ -44,6 +47,9 @@ route.use("/announcements", announcementRoute);
 
 route.use("/search", searchRoutes);
 route.use("/", articleRoutes);
+route.use("/authors", authorRoutes);
+route.use("/author-content", authorContentRoutes);
+route.use("/author-page", authorPageRoutes);
 route.use("/users-crud", generateCrudRoutes("User"));
 route.use("/submissions-crud", generateCrudRoutes("Submission"));
 route.use("/topics-crud", generateCrudRoutes("Topic"));

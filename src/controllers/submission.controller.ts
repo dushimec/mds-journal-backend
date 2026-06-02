@@ -12,22 +12,42 @@ import { uploadToR2 } from "../utils/r2Upload";
 import slugify from "slugify";
 
 export class SubmissionController {
- static create = asyncHandler(async (req: Request, res: Response) => {
+  static create = asyncHandler(async (req: Request, res: Response) => {
     if (!req.user) throw new AppError("User not authenticated", 401);
 
     const data = req.body;
     const files = (req.files as Express.Multer.File[]) || [];
 
+    // Validate required fields
+    if (!data.manuscriptTitle || data.manuscriptTitle.trim() === "") {
+      throw new AppError("Manuscript title is required", 400);
+    }
+    if (!data.abstract || data.abstract.trim() === "") {
+      throw new AppError("Abstract is required", 400);
+    }
+    if (!data.keywords || data.keywords.trim() === "") {
+      throw new AppError("Keywords are required", 400);
+    }
+    if (!data.topic || data.topic.trim() === "") {
+      throw new AppError("Topic is required", 400);
+    }
+
     if (!files.length) {
-      throw new AppError("PDF manuscript is required", 400);
+      throw new AppError("Manuscript file and Cover Letter are required", 400);
     }
 
     let authors: any[] = [];
     let declarations: any[] = [];
 
     try {
-      authors = data.authors ? JSON.parse(data.authors) : [];
-      declarations = data.declarations ? JSON.parse(data.declarations) : [];
+      // Handle both cases: already parsed arrays or JSON strings
+      authors = Array.isArray(data.authors) 
+        ? data.authors 
+        : (data.authors ? JSON.parse(data.authors) : []);
+      
+      declarations = Array.isArray(data.declarations) 
+        ? data.declarations 
+        : (data.declarations ? JSON.parse(data.declarations) : []);
     } catch (err) {
       throw new AppError("Invalid authors or declarations format", 400);
     }
@@ -36,8 +56,14 @@ export class SubmissionController {
       throw new AppError("At least one author is required", 400);
     }
 
-    if (!data.topic) {
-      throw new AppError("Topic is required", 400);
+    // Validate authors
+    for (const author of authors) {
+      if (!author.fullName || author.fullName.trim() === "") {
+        throw new AppError("Author full name is required", 400);
+      }
+      if (!author.email || author.email.trim() === "") {
+        throw new AppError("Author email is required", 400);
+      }
     }
 
     const topicRecord = await prisma.topic.findFirst({
@@ -75,7 +101,10 @@ export class SubmissionController {
       }
     } catch (error: any) {
       console.error("R2 Upload Error:", error);
-      throw new AppError("File upload failed", 500);
+      throw new AppError(
+        `File upload failed: ${error?.message || "Unknown error"}`,
+        500
+      );
     }
 
     try {

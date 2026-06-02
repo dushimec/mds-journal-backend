@@ -44,7 +44,11 @@ export class LogoController {
         if (!logoUrl) throw new AppError("Failed to retrieve Cloudinary URL", 500);
       } catch (err: any) {
         console.error("Logo upload error:", err);
-        throw new AppError("Failed to retrieve Cloudinary URL", 500);
+        // Check for Cloudinary stale request error
+        if (err.message && err.message.includes("Stale request")) {
+          throw new AppError("Server time is out of sync. Please sync your system clock.", 500);
+        }
+        throw new AppError(`Logo upload failed: ${err.message || "Unknown error"}`, 500);
       }
     }
 
@@ -83,7 +87,11 @@ export class LogoController {
       if (!logoUrl) throw new AppError("Failed to retrieve Cloudinary URL", 500);
     } catch (err: any) {
       console.error("Logo upload error:", err);
-      throw new AppError("Failed to retrieve Cloudinary URL", 500);
+      // Check for Cloudinary stale request error
+      if (err.message && err.message.includes("Stale request")) {
+        throw new AppError("Server time is out of sync. Please sync your system clock.", 500);
+      }
+      throw new AppError(`Logo upload failed: ${err.message || "Unknown error"}`, 500);
     }
   }
 

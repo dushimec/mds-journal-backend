@@ -104,6 +104,7 @@ model Author {
   affiliation       String
   isCorresponding   Boolean  @default(false)
   order             Int      @default(0)
+  pageContent       String?  // Dynamic content for author profile page
 
   submissionId      String
   submission        Submission @relation("SubmissionAuthors", fields: [submissionId], references: [id], onDelete: Cascade)
@@ -309,6 +310,9 @@ model AuthorPage {
   id      String @id @default("author-page")
   title   String
   tagline String
+  submissionSteps String? // JSON array
+  articleTypes String? // JSON array
+  guidelines String? // JSON array
   updatedAt DateTime @updatedAt
 }
 
