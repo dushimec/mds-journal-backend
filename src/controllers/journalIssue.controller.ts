@@ -5,7 +5,21 @@ import {prisma} from '../config/database';
 import { AppError } from '../utils/appError';
 
 export const createJournalIssue = asyncHandler(async (req: Request, res: Response) => {
-  const journalIssue = await prisma.journalIssue.create({ data: req.body });
+  const { volume, issue, year } = req.body;
+
+  // Validate required fields
+  if (!volume || !issue || !year) {
+    throw new AppError('Volume, issue, and year are required', 400);
+  }
+
+  // Validate that fields are numbers
+  if (typeof volume !== 'number' || typeof issue !== 'number' || typeof year !== 'number') {
+    throw new AppError('Volume, issue, and year must be numbers', 400);
+  }
+
+  const journalIssue = await prisma.journalIssue.create({
+    data: { volume, issue, year }
+  });
   res.status(201).json({ success: true, data: journalIssue });
 });
 
@@ -50,9 +64,36 @@ export const getJournalIssue = asyncHandler(async (req: Request, res: Response) 
 
 export const updateJournalIssue = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
+  const { volume, issue, year } = req.body;
+
+  // Validate that provided fields are numbers (allow partial updates)
+  const updateData: any = {};
+  if (volume !== undefined) {
+    if (typeof volume !== 'number') {
+      throw new AppError('Volume must be a number', 400);
+    }
+    updateData.volume = volume;
+  }
+  if (issue !== undefined) {
+    if (typeof issue !== 'number') {
+      throw new AppError('Issue must be a number', 400);
+    }
+    updateData.issue = issue;
+  }
+  if (year !== undefined) {
+    if (typeof year !== 'number') {
+      throw new AppError('Year must be a number', 400);
+    }
+    updateData.year = year;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    throw new AppError('At least one valid field (volume, issue, or year) is required', 400);
+  }
+
   const journalIssue = await prisma.journalIssue.update({
     where: { id },
-    data: req.body,
+    data: updateData,
   });
   res.status(200).json({ success: true, data: journalIssue });
 });

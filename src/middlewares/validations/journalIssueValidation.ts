@@ -3,13 +3,8 @@ import { body } from 'express-validator';
 import { validate } from '../validate';
 
 export const journalIssueValidationRules = [
-  body('issueNumber').notEmpty().withMessage('Issue number is required').isInt(),
-  body('year').notEmpty().withMessage('Year is required').isInt(),
-  body('month').optional().isInt(),
-  body('title').notEmpty().withMessage('Title is required').isString(),
-  body('description').optional().isString(),
-  body('isSpecial').optional().isBoolean(),
-  body('specialTitle').optional().isString(),
-  body('guestEditors').optional().isString(),
+  body('volume').notEmpty().withMessage('Volume is required').isInt().withMessage('Volume must be an integer'),
+  body('issue').notEmpty().withMessage('Issue is required').isInt().withMessage('Issue must be an integer'),
+  body('year').notEmpty().withMessage('Year is required').isInt().withMessage('Year must be an integer'),
   validate,
 ];
