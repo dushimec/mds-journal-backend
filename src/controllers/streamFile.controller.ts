@@ -55,21 +55,35 @@ export const downloadFile = asyncHandler(async (req: Request, res: Response) => 
 
 export const downloadFirstSubmissionFile = asyncHandler(async (req: Request, res: Response) => {
   const { submissionId } = req.params;
+  const fileId = (req.query.fileId as string) || null;
 
   if (!submissionId) {
     console.log("submissionId missing in request");
     return res.status(400).json({ success: false, message: "submissionId is required" });
   }
 
-  const file = await prisma.fileUpload.findFirst({
-    where: { submissionId },
-    orderBy: { createdAt: "asc" },
-  });
+  let file;
+
+  if (fileId) {
+    // If fileId is provided as query param, fetch that specific file
+    file = await prisma.fileUpload.findFirst({
+      where: { 
+        id: fileId,
+        submissionId: submissionId 
+      },
+    });
+  } else {
+    // Otherwise, fetch the first file of the submission
+    file = await prisma.fileUpload.findFirst({
+      where: { submissionId },
+      orderBy: { createdAt: "asc" },
+    });
+  }
 
   console.log("Found file for submission:", file);
 
   if (!file) {
-    console.log("No file found for submissionId:", submissionId);
+    console.log("No file found for submissionId:", submissionId, "fileId:", fileId);
     return res.status(404).json({ success: false, message: "No files found" });
   }
 

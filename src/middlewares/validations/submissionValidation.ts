@@ -22,35 +22,45 @@ export const validate = (req: Request, res: Response, next: NextFunction) => {
 
 export const createSubmissionValidation = [
   body("manuscriptTitle")
-    .optional()
+    .notEmpty()
+    .withMessage("Manuscript title is required")
     .isString()
     .withMessage("Manuscript title must be a string"),
   body("abstract")
-    .optional()
+    .notEmpty()
+    .withMessage("Abstract is required")
     .isString()
     .withMessage("Abstract must be a string"),
-  body("topicId")
-    .optional()
+  body("topic")
+    .notEmpty()
+    .withMessage("Topic is required")
     .isString()
-    .withMessage("Topic ID must be a string"),
+    .withMessage("Topic must be a string"),
   body("keywords")
-    .optional()
+    .notEmpty()
+    .withMessage("Keywords are required")
     .isString()
     .withMessage("Keywords must be a string"),
 
   body("authors")
-    .optional()
+    .notEmpty()
+    .withMessage("Authors are required")
     .isArray()
     .withMessage("Authors must be an array"),
   body("authors.*.fullName")
+    .notEmpty()
+    .withMessage("Author fullName is required")
     .isString()
-    .withMessage("Author fullName is required"),
+    .withMessage("Author fullName must be a string"),
   body("authors.*.email")
+    .notEmpty()
+    .withMessage("Author email is required")
     .isEmail()
     .withMessage("Author email must be valid"),
   body("authors.*.affiliation")
+    .optional()
     .isString()
-    .withMessage("Author affiliation is required"),
+    .withMessage("Author affiliation must be a string"),
   body("authors.*.isCorresponding")
     .optional()
     .isBoolean()
@@ -59,27 +69,6 @@ export const createSubmissionValidation = [
     .optional()
     .isInt({ min: 0 })
     .withMessage("Author order must be a positive integer"),
-
-  body("files")
-    .optional()
-    .isArray()
-    .withMessage("Files must be an array"),
-  body("files.*.fileName")
-    .isString()
-    .withMessage("fileName is required"),
-  body("files.*.fileUrl")
-    .isString()
-    .withMessage("fileUrl is required"),
-  body("files.*.mimeType")
-    .isString()
-    .withMessage("mimeType is required"),
-  body("files.*.fileSize")
-    .isInt({ min: 1 })
-    .withMessage("fileSize must be a positive integer"),
-  body("files.*.fileType")
-    .optional()
-    .isIn(Object.values(FileType))
-    .withMessage(`fileType must be one of: ${Object.values(FileType).join(", ")}`),
 
   body("declarations")
     .optional()
@@ -96,8 +85,9 @@ export const createSubmissionValidation = [
     .isBoolean()
     .withMessage("isChecked must be boolean"),
   body("declarations.*.text")
+    .optional()
     .isString()
-    .withMessage("Declaration text is required"),
+    .withMessage("Declaration text must be a string"),
 ];
 
 export const updateSubmissionValidation = [
