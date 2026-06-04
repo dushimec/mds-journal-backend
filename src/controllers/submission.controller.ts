@@ -316,7 +316,13 @@ export class SubmissionController {
 
       // -------------------------------
       // AUTO-GENERATE Volume / Issue and JournalIssue
+      // Volume increases with every publication
+      // Issues increase only twice per year: Jan-Jun (issue 1) and Jul-Dec (issue 2)
       // -------------------------------
+      const currentMonth = now.getMonth() + 1; // 1-12
+      const currentYear = now.getFullYear();
+      const currentIssue = currentMonth <= 6 ? 1 : 2; // Issue 1 for Jan-Jun, Issue 2 for Jul-Dec
+
       const lastJournalIssue = await prisma.journalIssue.findFirst({
         orderBy: [
           { year: "desc" },
@@ -326,16 +332,12 @@ export class SubmissionController {
       });
 
       let volumeNum = 1;
-      let issueNum = 1;
+      let issueNum = currentIssue;
 
       if (lastJournalIssue) {
-        if (lastJournalIssue.year === now.getFullYear()) {
-          volumeNum = lastJournalIssue.volume;
-          issueNum = lastJournalIssue.issue + 1;
-        } else {
-          volumeNum = lastJournalIssue.volume + 1;
-          issueNum = 1;
-        }
+        // Volume always increments with every publication
+        volumeNum = lastJournalIssue.volume + 1;
+        issueNum = currentIssue;
       }
 
       let journalIssue = await prisma.journalIssue.findFirst({

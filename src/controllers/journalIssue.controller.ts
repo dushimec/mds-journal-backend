@@ -66,6 +66,15 @@ export const updateJournalIssue = asyncHandler(async (req: Request, res: Respons
   const { id } = req.params;
   const { volume, issue, year } = req.body;
 
+  // Get the current journal issue to verify it exists
+  const currentIssue = await prisma.journalIssue.findUnique({
+    where: { id },
+  });
+
+  if (!currentIssue) {
+    throw new AppError('Journal issue not found', 404);
+  }
+
   // Validate that provided fields are numbers (allow partial updates)
   const updateData: any = {};
   if (volume !== undefined) {

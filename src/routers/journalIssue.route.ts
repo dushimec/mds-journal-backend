@@ -30,7 +30,7 @@ router.route('/:id')
     authorizeRoles(UserRole.ADMIN),
     getJournalIssue
     )
-  .patch(
+  .put(
     authenticate,
     authorizeRoles(UserRole.ADMIN),
     journalIssueValidationRules, 
