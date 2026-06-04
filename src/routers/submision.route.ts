@@ -97,8 +97,7 @@ router.get(
 // Generic fetch by id (placed after more specific routes to avoid route conflicts)
 router.get(
   "/:id",
-  authenticate,
-  authorizeRoles(UserRole.ADMIN),
+  
   getByIdSubmissionValidation,
   validate,
   SubmissionController.getById
