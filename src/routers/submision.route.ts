@@ -93,6 +93,17 @@ router.get(
   SubmissionController.stats
 );
 
+// Fetch by title (placed before generic /:id route to avoid conflicts)
+router.get(
+  "/by-title/:title",
+  SubmissionController.getByTitle
+);
+
+// Fetch by slug (placed before generic /:id route to avoid conflicts)
+router.get(
+  "/by-slug/:slug",
+  SubmissionController.getBySlug
+);
 
 // Generic fetch by id (placed after more specific routes to avoid route conflicts)
 router.get(

@@ -537,6 +537,62 @@ export class SubmissionController {
    data: updatedFile,
  });
 });
+
+  static getByTitle = asyncHandler(async (req: Request, res: Response) => {
+    const { title } = req.params;
+    
+    if (!title || title.trim() === "") {
+      throw new AppError("Manuscript title is required", 400);
+    }
+
+    const submission = await prisma.submission.findFirst({
+      where: { 
+        manuscriptTitle: {
+          equals: decodeURIComponent(title),
+          mode: 'insensitive'
+        }
+      },
+      include: {
+        authors: true,
+        files: true,
+        declarations: true,
+        user: { select: { firstName: true, lastName: true, email: true } },
+        topic: true,
+      },
+    });
+
+    if (!submission) throw new AppError("Article not found", 404);
+
+    res.json({ success: true, data: submission });
+  });
+
+  static getBySlug = asyncHandler(async (req: Request, res: Response) => {
+    const { slug } = req.params;
+    
+    if (!slug || slug.trim() === "") {
+      throw new AppError("Article slug is required", 400);
+    }
+
+    const submission = await prisma.submission.findFirst({
+      where: { 
+        articleSlug: {
+          equals: slug,
+          mode: 'insensitive'
+        }
+      },
+      include: {
+        authors: true,
+        files: true,
+        declarations: true,
+        user: { select: { firstName: true, lastName: true, email: true } },
+        topic: true,
+      },
+    });
+
+    if (!submission) throw new AppError("Article not found", 404);
+
+    res.json({ success: true, data: submission });
+  });
   
 }
 
