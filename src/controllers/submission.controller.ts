@@ -593,7 +593,56 @@ export class SubmissionController {
 
     res.json({ success: true, data: submission });
   });
-  
+
+  static trackView = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id || id.trim() === "") {
+      throw new AppError("Article ID is required", 400);
+    }
+
+    const submission = await prisma.submission.findUnique({
+      where: { id },
+    });
+
+    if (!submission) throw new AppError("Article not found", 404);
+
+    const updatedSubmission = await prisma.submission.update({
+      where: { id },
+      data: {
+        views: {
+          increment: 1,
+        },
+      },
+    });
+
+    res.json({ success: true, data: updatedSubmission });
+  });
+
+  static trackDownload = asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id || id.trim() === "") {
+      throw new AppError("Article ID is required", 400);
+    }
+
+    const submission = await prisma.submission.findUnique({
+      where: { id },
+    });
+
+    if (!submission) throw new AppError("Article not found", 404);
+
+    const updatedSubmission = await prisma.submission.update({
+      where: { id },
+      data: {
+        downloads: {
+          increment: 1,
+        },
+      },
+    });
+
+    res.json({ success: true, data: updatedSubmission });
+  });
 }
 
 function getPagination(

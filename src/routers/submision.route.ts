@@ -136,5 +136,14 @@ router.patch(
   SubmissionController.updateEditedFile
 );
 
+router.patch(
+  "/:id/track-view",
+  SubmissionController.trackView
+);
+
+router.patch(
+  "/:id/track-download",
+  SubmissionController.trackDownload
+);
 
 export default router;
